@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remix Mausam - Personalized Weather Homepage</title>
+    <meta name="description" content="SIH 2026 Problem Statement 26076: Modern, mobile-first personalized homepage for the Mausam (IMD) weather app with rule-based prioritization, alerts, offline caching, and bilingual support." />
+    <meta property="og:title" content="Remix Mausam - Personalized Weather Homepage" />
+    <meta property="og:description" content="SIH 2026 Problem Statement 26076: Modern, mobile-first personalized homepage for the Mausam (IMD) weather app with rule-based prioritization, alerts, offline caching, and bilingual support." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0284c7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Mausam" />
+    <script>
+      // Filter benign Vite websocket disconnection errors in AI Studio iframe environment
+      (function () {
+        var _err = console.error;
+        console.error = function () {
+          var msg = arguments[0];
+          if (typeof msg === 'string' && (msg.indexOf('[vite] failed to connect to websocket') !== -1 || msg.indexOf('[vite]') === 0)) {
+            return;
+          }
+          _err.apply(console, arguments);
+        };
+      })();
+    </script>
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Rozha+One&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-slate-100 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

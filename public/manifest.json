@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "Mausam - Personalized Weather Homepage",
+  "short_name": "Mausam",
+  "description": "SIH 2026: Mobile-first personalized weather portal for Mausam (IMD) with alerts, offline caching, and bilingual support.",
+  "theme_color": "#0284c7",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

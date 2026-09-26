@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#0369a1" />
+      <stop offset="100%" stop-color="#1e1b4b" />
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded rectangle for maskable / standalone safe zone -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Inner Safe Zone Content (80% circle safe zone) -->
+  <g transform="translate(0, 0)">
+    <!-- Sun Ray Glow -->
+    <circle cx="330" cy="190" r="75" fill="url(#sunGrad)" filter="url(#shadow)" />
+    
+    <!-- Cloud Layer -->
+    <path d="M190 350 H340 A60 60 0 0 0 340 230 A75 75 0 0 0 205 205 A65 65 0 0 0 145 285 A65 65 0 0 0 190 350 Z" 
+          fill="url(#cloudGrad)" filter="url(#shadow)" />
+
+    <!-- Rain / Lightning Accents -->
+    <path d="M210 375 L195 415" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" />
+    <path d="M255 375 L240 415" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" />
+    <path d="M300 375 L285 415" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" />
+  </g>
+</svg>
