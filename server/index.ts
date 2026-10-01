@@ -15,7 +15,7 @@ import {
   MOCK_COMMUTE_DATA,
   MOCK_EVENTS_DATA,
   DEMO_PERSONAS,
-} from './src/data/mockData.ts';
+} from '../src/data/mockData';
 import {
   ALL_INDIA_LOCATIONS,
   searchIndiaLocations,
@@ -23,17 +23,18 @@ import {
   generateHourlyForecastForLocation,
   generateDailyForecastForLocation,
   findIndiaLocation,
-} from './src/data/indiaLocations.ts';
-import { calculatePersonalizedCardOrder } from './src/engine/personalization.ts';
-import { getPersonalizedCommuteData } from './src/services/locationPersonalization.ts';
-import { UserPreferences, TimeOfDay } from './src/types.ts';
+} from '../src/data/indiaLocations';
+import { calculatePersonalizedCardOrder } from '../src/engine/personalization';
+import { getPersonalizedCommuteData } from '../src/services/locationPersonalization';
+import { UserPreferences, TimeOfDay } from '../src/types';
 import {
   AIOrchestrator,
   GeminiProvider,
   RuleEngineProvider,
-} from './server/aiProvider.ts';
-import { getCachedData, setCachedData } from './server/redisCache.ts';
-import { saveUserPreferencesDb, getUserPreferencesDb } from './server/supabaseClient.ts';
+} from './aiProvider';
+import { getCachedData, setCachedData } from './redisCache';
+import { saveUserPreferencesDb, getUserPreferencesDb } from './supabaseClient';
+import { getApiSetuStatus, fetchFromApiSetu } from './apiSetuService';
 
 // In-memory cache for AI insights to prevent rate-limit / 503 pressure
 const aiInsightCache = new Map<
@@ -85,16 +86,35 @@ for (const p of DEMO_PERSONAS) {
 // by requests originating from different client sessions.
 const preferenceOwnershipMap = new Map<string, string>();
 
-// Rate limiter for AI proxy endpoints (20 requests per hour per IP to protect Gemini API quota)
+// Rate limiter for AI proxy endpoints with graceful fallback to deterministic rule engine
 const aiRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // 20 requests per hour per IP
+  windowMs: 5 * 60 * 1000, // Reduced to 5 minutes for faster reset
+  max: 200, // Increased limit for better UX
   standardHeaders: true,
   legacyHeaders: false,
   validate: false,
-  message: {
-    success: false,
-    error: 'Rate limit exceeded: maximum 20 AI requests per hour per IP address.',
+  message: { success: true, message: 'Rate limit exceeded, falling back to rule engine.' },
+  handler: async (req: Request, res: Response) => {
+    const ruleEngine = new RuleEngineProvider();
+    if (req.path.includes('insight')) {
+      const { weather, preferences, timeOfDay, language } = req.body || {};
+      const fallback = await ruleEngine.generateInsight({
+        weather: weather || { location: 'Local Area', temperature: 28, humidity: 70, rainProbability: 20, condition: 'Fair' },
+        preferences: preferences || ['fitness'],
+        timeOfDay,
+        language: language === 'hi' ? 'hi' : 'en',
+      });
+      return res.json({ success: true, data: fallback });
+    } else {
+      const { question, weather, preferences, language } = req.body || {};
+      const fallback = await ruleEngine.askQuestion({
+        question: question || 'Weather advice',
+        weather: weather || { location: 'Local Area', temperature: 28, humidity: 70, rainProbability: 20, condition: 'Fair' },
+        preferences: preferences || [],
+        language: language === 'hi' ? 'hi' : 'en',
+      });
+      return res.json({ success: true, data: fallback });
+    }
   },
 });
 
@@ -114,9 +134,25 @@ function getAiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+process.on('uncaughtException', (err) => {
+  console.error('Mausam Server Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Mausam Server Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+  // Parse CLI args or environment variables for port and host (prioritizing Cloud Run PORT env)
+  const args = process.argv.slice(2);
+  const portArgIndex = args.indexOf('--port');
+  const portFromArgs = portArgIndex !== -1 && args[portArgIndex + 1] ? parseInt(args[portArgIndex + 1], 10) : null;
+  const PORT = Number(process.env.PORT) || portFromArgs || 3000;
+
+  const hostArgIndex = args.indexOf('--host');
+  const HOST = process.env.HOST || (hostArgIndex !== -1 && args[hostArgIndex + 1] ? args[hostArgIndex + 1] : '0.0.0.0');
 
   // Cloud Run / Reverse Proxy Configuration
   app.set('trust proxy', 1);
@@ -150,6 +186,28 @@ async function startServer() {
       version: '1.0.0-sih2026',
       offlineMockReady: true,
     });
+  });
+
+  // GET /api/apisetu/status
+  // Returns API Setu (MeitY) Integration and Gateway status
+  app.get('/api/apisetu/status', (_req: Request, res: Response) => {
+    res.json(getApiSetuStatus());
+  });
+
+  // GET /api/apisetu/mausam/:endpoint
+  // Unified query endpoint for keyless IMD APIs imported from MeitY's API Setu Mausam Collection
+  app.get('/api/apisetu/mausam/:endpoint', async (req: Request, res: Response) => {
+    const { endpoint } = req.params;
+    const query = req.query as Record<string, string>;
+    try {
+      const data = await fetchFromApiSetu(endpoint, query);
+      if (data) {
+        return res.json(data);
+      }
+      return res.status(404).json({ success: false, error: 'Endpoint or location mapping not found.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || 'Failed to query API Setu collection.' });
+    }
   });
 
   // GET /api/locations
@@ -563,7 +621,13 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      root: process.cwd(),
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: false,
+        watch: null,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -579,8 +643,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Mausam SIH 2026 server running on http://localhost:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Mausam SIH 2026 server running on http://${HOST}:${PORT}`);
   });
 }
 

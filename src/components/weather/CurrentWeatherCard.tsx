@@ -13,13 +13,15 @@ import {
   Pause,
   Play,
   Square,
+  Clock,
 } from 'lucide-react';
-import { CurrentWeather, WeatherAlert } from '../types';
-import { findIndiaLocation } from '../data/indiaLocations';
-import { TRANSLATIONS } from '../data/translations';
-import { formatIndianLocationDisplay } from '../utils/locationFormatter';
+import { CurrentWeather, WeatherAlert } from '../../types';
+import { findIndiaLocation } from '../../data/indiaLocations';
+import { TRANSLATIONS } from '../../data/translations';
+import { formatIndianLocationDisplay } from '../../utils/locationFormatter';
+import { formatLastUpdated } from '../../utils/timeFormat';
 import { DynamicWeatherCanvas, DynamicWeatherType } from './DynamicWeatherCanvas';
-import { ttsService, TTSState } from '../services/ttsService';
+import { ttsService, TTSState } from '../../services/ttsService';
 
 interface CurrentWeatherCardProps {
   weather: CurrentWeather;
@@ -38,8 +40,6 @@ export const CurrentWeatherCard: React.FC<CurrentWeatherCardProps> = ({
 }) => {
   const t = TRANSLATIONS[language];
   const stationMeta = findIndiaLocation(weather.location);
-  const stationCode = stationMeta?.stationCode || 'AWS-43063';
-  const elevation = stationMeta?.elevationMeters ? `${stationMeta.elevationMeters}m ASL` : '560m ASL';
 
   // Web Speech API / TTS State Subscription
   const [ttsState, setTtsState] = useState<TTSState>(() => ttsService.getState());
@@ -176,55 +176,31 @@ export const CurrentWeatherCard: React.FC<CurrentWeatherCardProps> = ({
       <div className="absolute -right-12 -top-12 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
       <div className="absolute -left-12 -bottom-12 w-48 h-48 rounded-full bg-black/20 blur-3xl pointer-events-none" />
 
-      {/* Top Station Status Strip */}
-      <div className="flex items-center justify-between gap-2 pb-2.5 mb-2 border-b border-white/15 text-[11px] text-white/80 relative z-10">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 font-medium">
-            <span className={`w-1.5 h-1.5 rounded-full ${isLiveApi ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-            <span>
-              {isLiveApi
-                ? language === 'hi'
-                  ? 'लाइव अवलोकन'
-                  : 'Live Telemetry'
-                : language === 'hi'
-                ? 'मौसम मॉडल'
-                : 'Modeled Baseline'}
-            </span>
-          </div>
-          <span className="text-white/40">·</span>
-          <span className="font-mono text-white/95 font-semibold">{stationCode}</span>
-          <span className="text-white/40 hidden sm:inline">·</span>
-          <span className="hidden sm:inline text-white/75">{elevation}</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-white/75 font-medium">
-            {t.lastUpdated}: <span className="font-mono">{weather.lastUpdated}</span>
-          </span>
-        </div>
-      </div>
-
       {/* Location Bar & Quick Action Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between relative z-10 mb-3 gap-2.5">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between relative z-10 mb-3.5 gap-2.5">
+        <div className="min-w-0">
           <button
             type="button"
             onClick={onOpenLocationPicker}
-            className="group flex items-center gap-2 text-left text-white hover:text-sky-200 transition-colors cursor-pointer"
+            className="group flex items-center gap-2 text-left text-white hover:text-sky-200 transition-colors cursor-pointer max-w-full"
             title="Click to select another Indian district or state"
           >
             <MapPin className="w-4 h-4 text-sky-300 group-hover:scale-110 transition-transform shrink-0" />
             <h2
               id="current-weather-location"
-              className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-1.5"
+              className="text-xl sm:text-2xl font-bold tracking-tight truncate"
             >
               <span>{formatIndianLocationDisplay(weather.location, stationMeta ? (language === 'hi' ? stationMeta.stateHi : stationMeta.state) : undefined, language)}</span>
             </h2>
           </button>
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-white/80 font-medium">
+            <Clock className="w-3.5 h-3.5 text-sky-200/90 shrink-0" />
+            <span>{formatLastUpdated(weather.lastUpdated, language)}</span>
+          </div>
         </div>
 
         {/* Action Controls: 'Listen to Forecast' Button & Rain Probability */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           {/* Dedicated Listen to Forecast Audio Reader Button */}
           {isPlaying ? (
             <div className="inline-flex items-center gap-1.5 bg-white text-slate-900 px-3 py-1.5 rounded-lg font-semibold text-xs shadow-xs transition-all">
@@ -307,21 +283,21 @@ export const CurrentWeatherCard: React.FC<CurrentWeatherCardProps> = ({
       </div>
 
       {/* Main Temperature & Condition Display */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-4 relative z-10 my-2">
-        <div className="flex items-baseline gap-3">
+      <div className="flex flex-col sm:flex-row items-start justify-start gap-6 relative z-10 my-4">
+        <div className="flex items-center gap-5">
           <span
             id="current-temp-value"
-            className="font-mono tabular-nums text-5xl sm:text-6xl font-bold tracking-tight text-white drop-shadow-xs"
+            className="font-mono tabular-nums text-6xl sm:text-7xl font-bold tracking-tighter text-white drop-shadow-md"
           >
             {weather.temperature}°
           </span>
-          <div className="flex flex-col">
-            <span className="text-base font-semibold text-white capitalize">
+          <div className="flex flex-col border-l border-white/20 pl-5">
+            <span className="text-lg sm:text-xl font-bold text-white capitalize leading-tight">
               {language === 'hi'
                 ? weather.conditionHi
                 : weather.condition}
             </span>
-            <span className="text-xs text-white/80 font-normal">
+            <span className="text-[13px] text-white/90 font-medium mt-0.5">
               {t.feelsLike} <span className="font-mono tabular-nums">{weather.feelsLike}°C</span>
             </span>
           </div>

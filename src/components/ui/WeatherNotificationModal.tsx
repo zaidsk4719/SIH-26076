@@ -20,7 +20,7 @@ import {
   saveNotificationSettings,
   sendWeatherAlertPush,
   WeatherNotificationSettings,
-} from '../services/notificationService';
+} from '../../services/notificationService';
 
 interface WeatherNotificationModalProps {
   isOpen: boolean;
@@ -38,6 +38,7 @@ export const WeatherNotificationModal: React.FC<WeatherNotificationModalProps> =
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [settings, setSettings] = useState<WeatherNotificationSettings>(getNotificationSettings());
   const [isTesting, setIsTesting] = useState(false);
+  const [isDelayedTesting, setIsDelayedTesting] = useState(false);
   const [testSentMessage, setTestSentMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,6 +93,42 @@ export const WeatherNotificationModal: React.FC<WeatherNotificationModalProps> =
     setTimeout(() => {
       setTestSentMessage(null);
     }, 4500);
+  };
+
+  const handleSendDelayedBackgroundTest = async () => {
+    setIsDelayedTesting(true);
+    setTestSentMessage(
+      language === 'hi'
+        ? '5 सेकंड में बैकग्राउंड अलर्ट भेजा जाएगा... अब आप दूसरे ऐप या टैब पर जा सकते हैं!'
+        : 'Background alert scheduled in 5 seconds... You can switch tabs or minimize the app now!'
+    );
+
+    setTimeout(async () => {
+      const title =
+        language === 'hi'
+          ? '🚨 [बैकग्राउंड अलर्ट] चक्रवाती तूफान चेतावनी'
+          : '🚨 [Background Alert] Severe Storm Warning';
+      const body =
+        language === 'hi'
+          ? `स्थान: ${currentLocationName}। ऐप बंद/बैकग्राउंड में होने पर भी सिस्टम अधिसूचना प्राप्त हुई।`
+          : `Location: ${currentLocationName}. System notification delivered while the app was inactive/backgrounded.`;
+
+      await sendWeatherAlertPush({
+        title,
+        body,
+        severity: 'red',
+        location: currentLocationName,
+        forceTest: true,
+      });
+
+      setIsDelayedTesting(false);
+      setTestSentMessage(
+        language === 'hi'
+          ? 'बैकग्राउंड अलर्ट सफलतापूर्वक सिस्टम में भेजा गया!'
+          : 'Background notification delivered to system tray!'
+      );
+      setTimeout(() => setTestSentMessage(null), 4500);
+    }, 5000);
   };
 
   const inIframe = isRunningInIframe();
@@ -324,6 +361,30 @@ export const WeatherNotificationModal: React.FC<WeatherNotificationModalProps> =
                 checked={settings.soundChime}
                 onChange={() => handleToggleSetting('soundChime')}
                 className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
+              />
+            </div>
+
+            {/* Notify When App Closed (Background & Offline PWA Sync) Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-sky-50/60 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/40">
+              <div className="flex items-center gap-2.5">
+                <BellRing className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                <div>
+                  <p className="text-xs font-bold text-sky-950 dark:text-sky-200 flex items-center gap-1.5">
+                    <span>{language === 'hi' ? 'ऐप बंद होने पर भी अलर्ट प्राप्त करें' : 'Alert Even When App Is Closed'}</span>
+                    <span className="text-[9px] px-1.5 py-0.2 bg-sky-600 text-white rounded font-bold">Service Worker</span>
+                  </p>
+                  <p className="text-[11px] text-sky-700/80 dark:text-sky-300/70">
+                    {language === 'hi'
+                      ? 'बैकग्राउंड सिंक व वेब पुश द्वारा ऐप बंद या स्क्रीन लॉक होने पर भी सिस्टम अलर्ट'
+                      : 'Delivers OS system notifications via Service Worker background sync even when app is closed'}
+                  </p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.notifyWhenAppClosed}
+                onChange={() => handleToggleSetting('notifyWhenAppClosed')}
+                className="w-4 h-4 accent-sky-600 rounded cursor-pointer"
               />
             </div>
           </div>

@@ -10,9 +10,13 @@ import {
   ExternalLink,
   Zap,
   CloudFog,
+  Radio,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { CommuteData, RouteOption } from '../../types';
 import { TRANSLATIONS } from '../../data/translations';
+import { CommuteRadarModal } from '../ui/CommuteRadarModal';
 
 interface CommuteCardProps {
   data: CommuteData;
@@ -37,6 +41,8 @@ export const CommuteCard: React.FC<CommuteCardProps> = memo(({
   const [selectedRouteId, setSelectedRouteId] = useState<string>(
     data.betterRoute?.id || data.currentRoute?.id || 'route-primary'
   );
+  const [isRadarModalOpen, setIsRadarModalOpen] = useState<boolean>(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const activeRoute =
     allRoutes.find((r) => r.id === selectedRouteId) || data.betterRoute || data.currentRoute;
@@ -92,16 +98,16 @@ export const CommuteCard: React.FC<CommuteCardProps> = memo(({
       className="w-full min-w-0 max-w-full overflow-hidden h-full flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm transition-all hover:shadow-md"
     >
       {/* 1. Header with Commute & Traffic Summary */}
-      <div className="flex items-center justify-between mb-3.5 flex-wrap gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+      <div className="flex items-center justify-between mb-3.5 gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
             <Car className="w-4 h-4" />
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
               {t.prefCommute}
             </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
               {language === 'hi'
                 ? 'यातायात अपडेट, दृश्यता, तूफान व कोहरा चेतावनी'
                 : 'Transit visibility, surface traction & road weather'}
@@ -109,17 +115,22 @@ export const CommuteCard: React.FC<CommuteCardProps> = memo(({
           </div>
         </div>
 
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-          <span>{isLiveApi ? (language === 'hi' ? 'लाइव सड़क मौसम' : 'Live Route Conditions') : (language === 'hi' ? 'रूट मॉडल' : 'Modeled Transit')}</span>
-        </div>
-
-        {/* Estimated traffic congestion index */}
-        <div className="flex items-center gap-2 text-right">
+        {/* Right side metadata & congestion indicator */}
+        <div className="flex items-center gap-2.5 text-right shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsRadarModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 text-[11px] font-bold transition-all border border-sky-500/20 cursor-pointer shadow-2xs"
+            title={language === 'hi' ? 'लाइव ट्रैफिक व रडार मैप खोलें' : 'Open Live Commuter Traffic Radar Map'}
+          >
+            <Radio className="w-3 h-3 text-sky-600 dark:text-sky-400 animate-pulse shrink-0" />
+            <span>{language === 'hi' ? 'ट्रैफिक रडार' : 'Traffic Radar'}</span>
+          </button>
           <div>
             <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
               {data.lastTrafficUpdate || (language === 'hi' ? 'अनुमानित' : 'Estimated')}
             </div>
-            <div className="text-xs font-black text-rose-600 dark:text-rose-400 flex items-center gap-1 justify-end">
+            <div className="text-xs font-black text-rose-600 dark:text-rose-400 flex items-center gap-1 justify-end font-mono tabular-nums">
               <Gauge className="w-3.5 h-3.5" />
               <span>
                 {data.congestionIndex ?? 78}% {language === 'hi' ? 'जाम' : 'Congestion'}
@@ -279,221 +290,262 @@ export const CommuteCard: React.FC<CommuteCardProps> = memo(({
         )}
       </div>
 
-      {/* 5. Interactive Route Options Selector */}
-      <div className="mb-3.5">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-            {language === 'hi' ? 'मार्ग विकल्प व सुरक्षित नेविगेशन:' : 'Route Options & Safe Navigation:'}
-          </span>
-          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-            {language === 'hi' ? 'सुरक्षित मार्ग उपलब्ध' : 'Safe Alternatives Available'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {/* Card for Current Primary Route */}
-          <button
-            type="button"
-            onClick={() => setSelectedRouteId(data.currentRoute.id)}
-            className={`text-left p-3 rounded-xl border transition-all ${
-              selectedRouteId === data.currentRoute.id
-                ? 'border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 ring-2 ring-rose-500/20'
-                : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/70'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[130px]">
-                {language === 'hi' ? data.currentRoute.nameHi : data.currentRoute.name}
+      {/* 5. Interactive Route Options Selector & Detail Panels (Expandable) */}
+      {isExpanded && (
+        <div className="space-y-3.5 animate-in fade-in duration-200">
+          {/* Route Options Selector */}
+          <div className="mb-3.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                {language === 'hi' ? 'मार्ग विकल्प व सुरक्षित नेविगेशन:' : 'Route Options & Safe Navigation:'}
               </span>
-              <span
-                className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded border ${getTrafficColor(
-                  data.currentRoute.trafficLevel
-                )}`}
-              >
-                {language === 'hi'
-                  ? data.currentRoute.trafficLevelHi
-                  : data.currentRoute.trafficLevel}
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                {language === 'hi' ? 'सुरक्षित मार्ग उपलब्ध' : 'Safe Alternatives Available'}
               </span>
             </div>
-            <div className="text-[11px] space-y-0.5 text-slate-600 dark:text-slate-300">
-              <div className="flex justify-between font-bold text-slate-900 dark:text-white">
-                <span>{data.currentRoute.distanceKm} km</span>
-                <span className="text-rose-600 dark:text-rose-400">
-                  {data.currentRoute.durationMin} min (+{data.currentRoute.delayMin}m)
-                </span>
-              </div>
-              <div className="flex justify-between text-[10px] text-slate-500">
-                <span>Avg Speed:</span>
-                <span className="font-semibold text-rose-600">
-                  {data.currentRoute.speedKmh || 16} km/h (Slow)
-                </span>
-              </div>
-            </div>
-          </button>
 
-          {/* Cards for Alternate Safe Routes */}
-          {(data.alternateRoutes || (data.betterRoute ? [data.betterRoute] : [])).map(
-            (altRoute) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {/* Card for Current Primary Route */}
               <button
-                key={altRoute.id}
                 type="button"
-                onClick={() => setSelectedRouteId(altRoute.id)}
+                onClick={() => setSelectedRouteId(data.currentRoute.id)}
                 className={`text-left p-3 rounded-xl border transition-all ${
-                  selectedRouteId === altRoute.id
-                    ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20'
-                    : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/30 dark:bg-emerald-950/10 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                  selectedRouteId === data.currentRoute.id
+                    ? 'border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 ring-2 ring-rose-500/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/70'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-emerald-950 dark:text-emerald-200 truncate max-w-[130px] flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-                    {language === 'hi' ? altRoute.nameHi : altRoute.name}
+                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[130px]">
+                    {language === 'hi' ? data.currentRoute.nameHi : data.currentRoute.name}
                   </span>
-                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
-                    Save ~{altRoute.savingsMin ?? 15}m
+                  <span
+                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded border ${getTrafficColor(
+                      data.currentRoute.trafficLevel
+                    )}`}
+                  >
+                    {language === 'hi'
+                      ? data.currentRoute.trafficLevelHi
+                      : data.currentRoute.trafficLevel}
                   </span>
                 </div>
                 <div className="text-[11px] space-y-0.5 text-slate-600 dark:text-slate-300">
-                  <div className="flex justify-between font-bold text-emerald-900 dark:text-emerald-300">
-                    <span>{altRoute.distanceKm} km</span>
-                    <span>{altRoute.durationMin} min (Faster)</span>
+                  <div className="flex justify-between font-bold text-slate-900 dark:text-white">
+                    <span>{data.currentRoute.distanceKm} km</span>
+                    <span className="text-rose-600 dark:text-rose-400">
+                      {data.currentRoute.durationMin} min (+{data.currentRoute.delayMin}m)
+                    </span>
                   </div>
-                  <div className="flex justify-between text-[10px] text-emerald-700 dark:text-emerald-400">
-                    <span>Flood-Safe Speed:</span>
-                    <span className="font-semibold">{altRoute.speedKmh || 45} km/h</span>
+                  <div className="flex justify-between text-[10px] text-slate-500">
+                    <span>Avg Speed:</span>
+                    <span className="font-semibold text-rose-600">
+                      {data.currentRoute.speedKmh || 16} km/h (Slow)
+                    </span>
                   </div>
                 </div>
               </button>
-            )
-          )}
-        </div>
-      </div>
 
-      {/* 6. Active Selected Route Details & Actionable Google Maps Link */}
-      {activeRoute && (
-        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 mb-3.5">
-          <div className="flex items-start justify-between gap-2 flex-wrap mb-2">
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black text-slate-900 dark:text-white">
-                  {activeRoute.isAlternative
-                    ? language === 'hi'
-                      ? 'अनुशंसित सुरक्षित वैकल्पिक मार्ग:'
-                      : 'Recommended Safe Alternate Route:'
-                    : language === 'hi'
-                    ? 'वर्तमान प्राथमिक मार्ग (भारी जाम):'
-                    : 'Current Primary Route (Heavy Traffic):'}
-                </span>
-                {activeRoute.floodSafe && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
-                    Waterlogging-Free
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                {language === 'hi' ? activeRoute.nameHi : activeRoute.name}
-              </p>
+              {/* Cards for Alternate Safe Routes */}
+              {(data.alternateRoutes || (data.betterRoute ? [data.betterRoute] : [])).map(
+                (altRoute) => (
+                  <button
+                    key={altRoute.id}
+                    type="button"
+                    onClick={() => setSelectedRouteId(altRoute.id)}
+                    className={`text-left p-3 rounded-xl border transition-all ${
+                      selectedRouteId === altRoute.id
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20'
+                        : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/30 dark:bg-emerald-950/10 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-emerald-950 dark:text-emerald-200 truncate max-w-[130px] flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        {language === 'hi' ? altRoute.nameHi : altRoute.name}
+                      </span>
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
+                        Save ~{altRoute.savingsMin ?? 15}m
+                      </span>
+                    </div>
+                    <div className="text-[11px] space-y-0.5 text-slate-600 dark:text-slate-300">
+                      <div className="flex justify-between font-bold text-emerald-900 dark:text-emerald-300">
+                        <span>{altRoute.distanceKm} km</span>
+                        <span>{altRoute.durationMin} min (Faster)</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-emerald-700 dark:text-emerald-400">
+                        <span>Flood-Safe Speed:</span>
+                        <span className="font-semibold">{altRoute.speedKmh || 45} km/h</span>
+                      </div>
+                    </div>
+                  </button>
+                )
+              )}
             </div>
-
-            {/* Launch on Google Maps Button */}
-            <button
-              type="button"
-              onClick={() => handleOpenGoogleMaps(activeRoute.name)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all shadow-sm"
-              aria-label={`Open ${activeRoute.name} in Google Maps`}
-            >
-              <span>{language === 'hi' ? 'गूगल मैप्स में खोलें' : 'Navigate on Google Maps'}</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
           </div>
 
-          {/* Route safety reason or highlights */}
-          {activeRoute.safetyReason && (
-            <p className="text-[11px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 flex items-start gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-              <span>
-                {language === 'hi' ? activeRoute.safetyReasonHi : activeRoute.safetyReason}
-              </span>
-            </p>
+          {/* 6. Active Selected Route Details & Actionable Google Maps Link */}
+          {activeRoute && (
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 mb-3.5">
+              <div className="flex items-start justify-between gap-2 flex-wrap mb-2">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-slate-900 dark:text-white">
+                      {activeRoute.isAlternative
+                        ? language === 'hi'
+                          ? 'अनुशंसित सुरक्षित वैकल्पिक मार्ग:'
+                          : 'Recommended Safe Alternate Route:'
+                        : language === 'hi'
+                        ? 'वर्तमान प्राथमिक मार्ग (भारी जाम):'
+                        : 'Current Primary Route (Heavy Traffic):'}
+                    </span>
+                    {activeRoute.floodSafe && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
+                        Waterlogging-Free
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                    {language === 'hi' ? activeRoute.nameHi : activeRoute.name}
+                  </p>
+                </div>
+
+                {/* Action buttons: Radar Map & Google Maps */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setIsRadarModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 active:scale-95 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+                    <span>{language === 'hi' ? 'ट्रैफिक रडार मैप' : 'Traffic Radar Map'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenGoogleMaps(activeRoute.name)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold transition-all shadow-xs border border-slate-700 cursor-pointer"
+                    aria-label={`Open ${activeRoute.name} in Google Maps`}
+                  >
+                    <span>{language === 'hi' ? 'गूगल मैप्स' : 'Google Maps'}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Route safety reason or highlights */}
+              {activeRoute.safetyReason && (
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 flex items-start gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>
+                    {language === 'hi' ? activeRoute.safetyReasonHi : activeRoute.safetyReason}
+                  </span>
+                </p>
+              )}
+            </div>
           )}
+
+          {/* 7. Dedicated Visibility Conditions, Storm & Fog Travel Alerts Panel */}
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <CloudFog className="w-4 h-4 text-amber-500" />
+                <span>
+                  {language === 'hi'
+                    ? 'दृश्‍यता स्थितियां, तूफान व कोहरा अलर्ट'
+                    : 'Visibility Conditions, Storm & Fog Travel Alerts'}
+                </span>
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                {language === 'hi' ? 'सड़क स्थितियां' : 'Road Safety'}
+              </span>
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              {/* 1. Road Visibility Conditions Panel */}
+              <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5 text-xs">
+                    <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>{language === 'hi' ? 'सड़क दृश्यता' : 'Road Visibility'}</span>
+                  </span>
+                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100">
+                    {data.visibilityKm ?? 4.5} km
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900 dark:text-amber-300 leading-snug font-medium">
+                  {(language === 'hi' ? data.visibilityAdvisoryHi : data.visibilityAdvisory) ||
+                    (language === 'hi'
+                      ? 'सड़क दृश्यता सीमित है; लो-बीम हेडलाइट्स और सुरक्षित दूरी बनाए रखें।'
+                      : 'Visibility restricted on highways; use low-beam headlights and maintain braking gap.')}
+                </p>
+              </div>
+
+              {/* 2. Storm & Thunderstorm Risk Panel */}
+              <div className="p-2.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-rose-950 dark:text-rose-200 flex items-center gap-1.5 text-xs">
+                    <Zap className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span>{language === 'hi' ? 'तूफान व बारिश चेतावनी' : 'Storm & Squall Alert'}</span>
+                  </span>
+                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-100">
+                    {data.stormAlertActive ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निगरानी' : 'Monitored')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-rose-900 dark:text-rose-300 leading-snug font-medium">
+                  {(language === 'hi' ? data.stormAlertDetails?.descriptionHi : data.stormAlertDetails?.description) ||
+                    (language === 'hi'
+                      ? 'तेज गरज के साथ तूफान और जलभराव का जोखिम; खुले क्षेत्रों में सतर्क रहें।'
+                      : 'Convective storm warnings with waterlogging risks on low-lying expressways.')}
+                </p>
+              </div>
+
+              {/* 3. Fog & Mist Driving Hazard Panel */}
+              <div className="p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-xs">
+                    <CloudFog className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 shrink-0" />
+                    <span>{language === 'hi' ? 'कोहरा व धुंध स्थिति' : 'Fog & Mist Advisory'}</span>
+                  </span>
+                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                    Max {data.fogAlertDetails?.recommendedSpeedKmh || (data.visibilityKm < 2 ? 30 : 50)} km/h
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-snug font-medium">
+                  {(language === 'hi' ? data.fogAlertDetails?.descriptionHi : data.fogAlertDetails?.description) ||
+                    (language === 'hi'
+                      ? 'सुबह and देर रात के दौरान कोहरा छाए रहने की संभावना; फॉग लैंप का उपयोग करें।'
+                      : 'Radiation fog probable during early morning commute hours; deploy fog lamps as needed.')}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* 7. Dedicated Visibility Conditions, Storm & Fog Travel Alerts Panel */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-        <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <CloudFog className="w-4 h-4 text-amber-500" />
-            <span>
-              {language === 'hi'
-                ? 'दृश्‍यता स्थितियां, तूफान व कोहरा अलर्ट'
-                : 'Visibility Conditions, Storm & Fog Travel Alerts'}
-            </span>
-          </span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-            {language === 'hi' ? 'आईएमडी सुरक्षा मानक' : 'IMD Safety Standards'}
-          </span>
-        </h4>
+      {/* Expand / Collapse Toggle Button */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        type="button"
+        className="w-full mt-3 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs border border-slate-200 dark:border-slate-700"
+      >
+        <span>
+          {isExpanded
+            ? (language === 'hi' ? 'कम विवरण दिखाएं' : 'Show Less')
+            : (language === 'hi' ? 'विस्तृत जानकारी देखें' : 'Expand Details')}
+        </span>
+        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-          {/* 1. Road Visibility Conditions Panel */}
-          <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5 text-xs">
-                <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>{language === 'hi' ? 'सड़क दृश्यता' : 'Road Visibility'}</span>
-              </span>
-              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100">
-                {data.visibilityKm ?? 4.5} km
-              </span>
-            </div>
-            <p className="text-[11px] text-amber-900 dark:text-amber-300 leading-snug font-medium">
-              {(language === 'hi' ? data.visibilityAdvisoryHi : data.visibilityAdvisory) ||
-                (language === 'hi'
-                  ? 'सड़क दृश्यता सीमित है; लो-बीम हेडलाइट्स और सुरक्षित दूरी बनाए रखें।'
-                  : 'Visibility restricted on highways; use low-beam headlights and maintain braking gap.')}
-            </p>
-          </div>
-
-          {/* 2. Storm & Thunderstorm Risk Panel */}
-          <div className="p-2.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-rose-950 dark:text-rose-200 flex items-center gap-1.5 text-xs">
-                <Zap className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                <span>{language === 'hi' ? 'तूफान व बारिश चेतावनी' : 'Storm & Squall Alert'}</span>
-              </span>
-              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-100">
-                {data.stormAlertActive ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निगरानी' : 'Monitored')}
-              </span>
-            </div>
-            <p className="text-[11px] text-rose-900 dark:text-rose-300 leading-snug font-medium">
-              {(language === 'hi' ? data.stormAlertDetails?.descriptionHi : data.stormAlertDetails?.description) ||
-                (language === 'hi'
-                  ? 'तेज गरज के साथ तूफान और जलभराव का जोखिम; खुले क्षेत्रों में सतर्क रहें।'
-                  : 'Convective storm warnings with waterlogging risks on low-lying expressways.')}
-            </p>
-          </div>
-
-          {/* 3. Fog & Mist Driving Hazard Panel */}
-          <div className="p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-xs">
-                <CloudFog className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 shrink-0" />
-                <span>{language === 'hi' ? 'कोहरा व धुंध स्थिति' : 'Fog & Mist Advisory'}</span>
-              </span>
-              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-                Max {data.fogAlertDetails?.recommendedSpeedKmh || (data.visibilityKm < 2 ? 30 : 50)} km/h
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-snug font-medium">
-              {(language === 'hi' ? data.fogAlertDetails?.descriptionHi : data.fogAlertDetails?.description) ||
-                (language === 'hi'
-                  ? 'सुबह और देर रात के दौरान कोहरा छाए रहने की संभावना; फॉग लैंप का उपयोग करें।'
-                  : 'Radiation fog probable during early morning commute hours; deploy fog lamps as needed.')}
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Dynamic Traffic & Doppler Radar Modal */}
+      {isRadarModalOpen && (
+        <CommuteRadarModal
+          isOpen={isRadarModalOpen}
+          onClose={() => setIsRadarModalOpen(false)}
+          commuteData={data}
+          language={language}
+          locationName={data.currentRoute?.name || 'Local Commute Corridor'}
+        />
+      )}
     </article>
   );
 });

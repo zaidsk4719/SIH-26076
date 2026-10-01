@@ -15,16 +15,153 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Mausam" />
     <script>
-      // Filter benign Vite websocket disconnection errors in AI Studio iframe environment
+      // Intercept and handle Vite HMR WebSockets & filter logs in AI Studio iframe environment
       (function () {
-        var _err = console.error;
-        console.error = function () {
-          var msg = arguments[0];
-          if (typeof msg === 'string' && (msg.indexOf('[vite] failed to connect to websocket') !== -1 || msg.indexOf('[vite]') === 0)) {
-            return;
+        // 1. Intercept WebSocket constructor for Vite HMR
+        var OrigWebSocket = window.WebSocket;
+        if (OrigWebSocket) {
+          window.WebSocket = function (url, protocols) {
+            var urlStr = String(url || '');
+            if (
+              urlStr.indexOf('vite-hmr') !== -1 ||
+              urlStr.indexOf('vite') !== -1 ||
+              urlStr.indexOf('/@vite/client') !== -1
+            ) {
+              var listeners = {};
+              var mockWs = {
+                readyState: 1, // OPEN
+                bufferedAmount: 0,
+                extensions: '',
+                protocol: '',
+                binaryType: 'blob',
+                url: urlStr,
+                onopen: null,
+                onerror: null,
+                onclose: null,
+                onmessage: null,
+                send: function () {},
+                close: function () {
+                  mockWs.readyState = 3; // CLOSED
+                  if (mockWs.onclose) {
+                    try { mockWs.onclose({ wasClean: true, code: 1000, reason: '' }); } catch(e) {}
+                  }
+                  trigger('close', { wasClean: true, code: 1000, reason: '' });
+                },
+                addEventListener: function (type, callback) {
+                  if (!listeners[type]) listeners[type] = [];
+                  listeners[type].push(callback);
+                },
+                removeEventListener: function (type, callback) {
+                  if (listeners[type]) {
+                    var idx = listeners[type].indexOf(callback);
+                    if (idx !== -1) listeners[type].splice(idx, 1);
+                  }
+                },
+                dispatchEvent: function () {
+                  return true;
+                },
+              };
+
+              function trigger(type, eventData) {
+                var list = listeners[type] || [];
+                for (var j = 0; j < list.length; j++) {
+                  try { list[j](eventData); } catch(e) {}
+                }
+              }
+
+              setTimeout(function () {
+                if (mockWs.readyState === 1) {
+                  if (mockWs.onopen) {
+                    try { mockWs.onopen(); } catch(e) {}
+                  }
+                  trigger('open', {});
+                }
+              }, 50);
+
+              return mockWs;
+            }
+            return new OrigWebSocket(url, protocols);
+          };
+          window.WebSocket.prototype = OrigWebSocket.prototype;
+          window.WebSocket.CONNECTING = 0;
+          window.WebSocket.OPEN = 1;
+          window.WebSocket.CLOSING = 2;
+          window.WebSocket.CLOSED = 3;
+        }
+
+        // 2. Filter console logs for benign Vite messages
+        var methods = ['debug', 'log', 'info', 'warn', 'error'];
+        function isViteMessage(args) {
+          if (!args || !args.length) return false;
+          for (var j = 0; j < args.length; j++) {
+            var item = args[j];
+            var str = '';
+            if (typeof item === 'string') {
+              str = item;
+            } else if (item && typeof item === 'object') {
+              str = (item.message || '') + ' ' + (item.stack || '') + ' ' + String(item);
+            }
+            if (
+              str.indexOf('[vite]') !== -1 ||
+              str.indexOf('vite:') !== -1 ||
+              str.indexOf('WebSocket') !== -1 ||
+              str.indexOf('websocket') !== -1 ||
+              str.indexOf('vite-hmr') !== -1
+            ) {
+              return true;
+            }
           }
-          _err.apply(console, arguments);
-        };
+          return false;
+        }
+
+        for (var i = 0; i < methods.length; i++) {
+          (function (m) {
+            var original = console[m];
+            if (typeof original === 'function') {
+              console[m] = function () {
+                if (isViteMessage(arguments)) {
+                  return;
+                }
+                return original.apply(console, arguments);
+              };
+            }
+          })(methods[i]);
+        }
+
+        // 3. Catch window errors & unhandled rejections related to WebSocket or Vite
+        window.addEventListener(
+          'error',
+          function (event) {
+            var msg = String((event && (event.message || event.error)) || '');
+            if (
+              msg.indexOf('[vite]') !== -1 ||
+              msg.indexOf('WebSocket') !== -1 ||
+              msg.indexOf('websocket') !== -1 ||
+              msg.indexOf('vite:') !== -1
+            ) {
+              if (event.preventDefault) event.preventDefault();
+              if (event.stopPropagation) event.stopPropagation();
+            }
+          },
+          true
+        );
+
+        window.addEventListener(
+          'unhandledrejection',
+          function (event) {
+            var reason = event && event.reason ? String(event.reason.message || event.reason) : '';
+            if (
+              reason.indexOf('[vite]') !== -1 ||
+              reason.indexOf('WebSocket') !== -1 ||
+              reason.indexOf('websocket') !== -1 ||
+              reason.indexOf('vite:') !== -1
+            ) {
+              if (event.preventDefault) event.preventDefault();
+              if (event.stopPropagation) event.stopPropagation();
+            }
+          },
+          true
+        );
       })();
     </script>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

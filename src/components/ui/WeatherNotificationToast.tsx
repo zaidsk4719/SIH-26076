@@ -10,7 +10,7 @@ import {
 import {
   InAppAlertToast,
   playWeatherAlertChime,
-} from '../services/notificationService';
+} from '../../services/notificationService';
 
 interface WeatherNotificationToastProps {
   language: 'en' | 'hi';
@@ -53,7 +53,7 @@ export const WeatherNotificationToast: React.FC<WeatherNotificationToastProps> =
     <div
       id="weather-notification-toast-container"
       aria-live="assertive"
-      className="fixed top-3 sm:top-5 right-3 sm:right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-auto select-none"
+      className="fixed bottom-5 right-3 sm:right-5 z-50 flex flex-col gap-2.5 max-w-sm w-[calc(100%-1.5rem)] sm:w-full pointer-events-auto select-none"
     >
       {toasts.map((toast) => {
         const isRed = toast.severity === 'red';
@@ -101,10 +101,10 @@ export const WeatherNotificationToast: React.FC<WeatherNotificationToastProps> =
                       }`}
                     >
                       {isRed
-                        ? 'IMD Red Warning'
+                        ? 'Red Warning'
                         : isOrange
-                        ? 'IMD Orange Alert'
-                        : 'IMD Advisory'}
+                        ? 'Orange Alert'
+                        : 'Weather Advisory'}
                     </span>
                     <span className="text-[10px] text-white/60 font-medium">
                       {toast.location} • {toast.timestamp}

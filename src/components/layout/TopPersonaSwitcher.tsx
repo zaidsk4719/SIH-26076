@@ -12,7 +12,7 @@ import {
   HeartPulse,
   LucideIcon,
 } from 'lucide-react';
-import { Language } from '../types';
+import { Language } from '../../types';
 
 export interface PersonaItem {
   id: string;

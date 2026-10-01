@@ -33,36 +33,42 @@ import {
 } from './services/locationPersonalization';
 import { calculatePersonalizedCardOrder } from './engine/personalization';
 import { TRANSLATIONS } from './data/translations';
-import { fetchLiveWeatherForLocation, LiveWeatherData, buildHealthDataFromPollutants } from './services/weatherApi';
+import {
+  fetchLiveWeatherForLocation,
+  getCachedWeatherForLocation,
+  LiveWeatherData,
+  buildHealthDataFromPollutants,
+} from './services/weatherApi';
+import {
+  fetchApiSetuWarnings,
+  ApiSetuWarning,
+} from './services/apiSetu';
+import { fetchLiveTrafficData, DynamicTrafficResult } from './services/trafficApi';
 import { formatIndianLocationDisplay } from './utils/locationFormatter';
 import { getOrCreateDeviceSessionId } from './utils/session';
 
 // Components
-import { Header } from './components/Header';
-import { TopPersonaSwitcher } from './components/TopPersonaSwitcher';
+import { Header } from './components/layout/Header';
+import { TopPersonaSwitcher } from './components/layout/TopPersonaSwitcher';
 import { autoDetectUserLocation, requestBrowserCoordinates } from './services/geolocationService';
-import { CurrentWeatherCard } from './components/CurrentWeatherCard';
-import { AlertsBanner } from './components/AlertsBanner';
-import { HomepageHourlyCard } from './components/HomepageHourlyCard';
-import { HomepageSevenDayCard } from './components/HomepageSevenDayCard';
-import { DynamicWeatherHighlights } from './components/DynamicWeatherHighlights';
-import { PullToRefreshContainer } from './components/PullToRefreshContainer';
-import { WeatherNotificationToast } from './components/WeatherNotificationToast';
+import { CurrentWeatherCard } from './components/weather/CurrentWeatherCard';
+import { AlertsBanner } from './components/features/AlertsBanner';
+import { HomepageHourlyCard } from './components/weather/HomepageHourlyCard';
+import { HomepageSevenDayCard } from './components/weather/HomepageSevenDayCard';
+import { DynamicWeatherHighlights } from './components/weather/DynamicWeatherHighlights';
+import { PullToRefreshContainer } from './components/interaction/PullToRefreshContainer';
+import { WeatherNotificationToast } from './components/ui/WeatherNotificationToast';
 import {
   sendWeatherAlertPush,
   getNotificationSettings,
+  registerServiceWorkerBackgroundAlerts,
+  scheduleBackgroundAlert,
 } from './services/notificationService';
 
-// Lazy-loaded Modals for code splitting and instant startup performance
-const OnboardingModal = lazy(() =>
-  import('./components/OnboardingModal').then((m) => ({ default: m.OnboardingModal }))
-);
-const LocationPickerModal = lazy(() =>
-  import('./components/LocationPickerModal').then((m) => ({ default: m.LocationPickerModal }))
-);
-const WeatherNotificationModal = lazy(() =>
-  import('./components/WeatherNotificationModal').then((m) => ({ default: m.WeatherNotificationModal }))
-);
+// Modals (Direct static imports for zero-friction loading)
+import { OnboardingModal } from './components/ui/OnboardingModal';
+import { LocationPickerModal } from './components/ui/LocationPickerModal';
+import { WeatherNotificationModal } from './components/ui/WeatherNotificationModal';
 
 // Cards
 import { FitnessCard } from './components/PersonalizedCards/FitnessCard';
@@ -181,27 +187,53 @@ export default function App() {
   const [refreshCounter, setRefreshCounter] = useState<number>(0);
   const [lastRefreshedTime, setLastRefreshedTime] = useState<string>('');
 
-  // Live Free Weather API State (Open-Meteo & RainViewer)
-  const [liveWeatherData, setLiveWeatherData] = useState<LiveWeatherData | null>(null);
+  // Live Weather State (Open-Meteo live stream or Offline Cache)
+  const [liveWeatherData, setLiveWeatherData] = useState<LiveWeatherData | null>(() => {
+    return getCachedWeatherForLocation(selectedLocation);
+  });
   const [isLiveApiLoading, setIsLiveApiLoading] = useState<boolean>(false);
 
+  // API Setu Official Warnings State
+  const [officialWarnings, setOfficialWarnings] = useState<ApiSetuWarning[]>([]);
+
   // Fetch live weather data from Open-Meteo Free API whenever location changes or user refreshes
+  // When offline, hydrate directly from local offline cache
   useEffect(() => {
-    if (isOffline) return;
     let isMounted = true;
+
+    if (isOffline) {
+      const cached = getCachedWeatherForLocation(selectedLocation);
+      if (cached && isMounted) {
+        setLiveWeatherData(cached);
+        setLastRefreshedTime(cached.lastSynced);
+      }
+      return;
+    }
+
     setIsLiveApiLoading(true);
-    // Immediately clear previous location's live data to prevent stale data display
-    setLiveWeatherData(null);
     fetchLiveWeatherForLocation(selectedLocation)
       .then((data) => {
-        if (isMounted && data) {
-          setLiveWeatherData(data);
-          setLastRefreshedTime(data.lastSynced);
+        if (isMounted) {
+          if (data) {
+            setLiveWeatherData(data);
+            setLastRefreshedTime(data.lastSynced);
+          } else {
+            const cached = getCachedWeatherForLocation(selectedLocation);
+            if (cached) {
+              setLiveWeatherData(cached);
+              setLastRefreshedTime(cached.lastSynced);
+            }
+          }
         }
       })
       .catch(() => {
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
           setIsOffline(true);
+        }
+        const cached = getCachedWeatherForLocation(selectedLocation);
+        if (cached && isMounted) {
+          setLiveWeatherData(cached);
+          setLastRefreshedTime(cached.lastSynced);
         }
       })
       .finally(() => {
@@ -213,7 +245,31 @@ export default function App() {
     };
   }, [selectedLocation, isOffline, refreshCounter]);
 
-  // Pull-to-refresh handler: re-fetches live telemetry from free Open-Meteo API
+  // Fetch official IMD API Setu Collection warnings whenever location changes
+  useEffect(() => {
+    let isMounted = true;
+    if (isOffline) return;
+
+    const fetchOfficialWarnings = async () => {
+      const matched = findIndiaLocation(selectedLocation);
+      const cityName = matched?.name || selectedLocation;
+      
+      try {
+        const warn = await fetchApiSetuWarnings(cityName);
+
+        if (isMounted && warn) {
+          setOfficialWarnings(warn);
+        }
+      } catch (err) {
+        console.warn('Official API Setu warnings fetch failed:', err);
+      }
+    };
+
+    fetchOfficialWarnings();
+    return () => { isMounted = false; };
+  }, [selectedLocation, isOffline, refreshCounter]);
+
+  // Pull-to-refresh handler: re-fetches live telemetry or refreshes from offline cache
   const handlePullRefresh = async () => {
     setIsPullRefreshing(true);
     const networkOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -225,20 +281,34 @@ export default function App() {
         const data = await fetchLiveWeatherForLocation(selectedLocation);
         if (data) {
           setLiveWeatherData(data);
+          setLastRefreshedTime(data.lastSynced);
         }
       } catch {
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
           setIsOffline(true);
         }
+        const cached = getCachedWeatherForLocation(selectedLocation);
+        if (cached) {
+          setLiveWeatherData(cached);
+          setLastRefreshedTime(cached.lastSynced);
+        }
+      }
+    } else {
+      // Offline pull-to-refresh: reload latest saved cache
+      const cached = getCachedWeatherForLocation(selectedLocation);
+      if (cached) {
+        setLiveWeatherData(cached);
+        setLastRefreshedTime(cached.lastSynced);
       }
     }
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setLastRefreshedTime(
-      liveWeatherData?.isLive && !networkOffline
-        ? `Open-Meteo API (${timeStr})`
-        : `Mock Data (${timeStr})`
-    );
+    setLastRefreshedTime((prev) => {
+      if (liveWeatherData?.isLive && !networkOffline && !isOffline) {
+        return `Open-Meteo API (${timeStr})`;
+      }
+      return prev || `Offline Cache (${timeStr})`;
+    });
     setRefreshCounter((prev) => prev + 1);
     setIsPullRefreshing(false);
   };
@@ -341,10 +411,17 @@ export default function App() {
 
   // Weather data for active location with diurnal adjustments and live refresh jitter
   const currentWeather = useMemo(() => {
-    const isMatchingLive = !isOffline && liveWeatherData && liveWeatherData.locationId === selectedLocation;
-    const liveCur = isMatchingLive ? liveWeatherData.currentWeather : null;
+    const isMatchingData = Boolean(
+      liveWeatherData &&
+      (liveWeatherData.locationId === selectedLocation ||
+       liveWeatherData.locationId === currentLocationObj.id ||
+       liveWeatherData.locationId.toLowerCase() === selectedLocation.toLowerCase() ||
+       liveWeatherData.locationId.toLowerCase() === currentLocationObj.name.toLowerCase())
+    );
+    const isLive = !isOffline && Boolean(liveWeatherData?.isLive) && isMatchingData;
+    const weatherSource = isMatchingData ? liveWeatherData?.currentWeather : null;
     const proceduralFallback = generateWeatherForLocation(currentLocationObj);
-    const rawBase = liveCur || MOCK_CURRENT_WEATHER[selectedLocation] || proceduralFallback;
+    const rawBase = weatherSource || MOCK_CURRENT_WEATHER[selectedLocation] || proceduralFallback;
     
     // Enforce selected location name & state consistently with exact telemetry
     const base = {
@@ -359,8 +436,13 @@ export default function App() {
       humidity: Math.max(10, Math.min(100, base.humidity)),
       windSpeed: Math.max(0, base.windSpeed),
       airPressure: Math.round(base.airPressure * 10) / 10,
-      lastUpdated: lastRefreshedTime || (isMatchingLive ? 'Open-Meteo API' : 'Simulated Weather Model'),
+      lastUpdated: liveWeatherData?.lastSynced || lastRefreshedTime || base.lastUpdated || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+
+    // When live API data is present, preserve real live temperature and atmospheric readings directly
+    if (isLive && weatherSource) {
+      return cleanBase;
+    }
 
     const localHour = new Date().getHours();
     // Real diurnal solar detection: check live API isDay first, or fallback to real local clock
@@ -391,17 +473,12 @@ export default function App() {
         nightIcon = 'cloud-moon';
       }
 
-      const nightTemp = Math.round(
-        cleanBase.tempLow ? cleanBase.tempLow + 1 : cleanBase.temperature - 4
-      );
-
       return {
         ...cleanBase,
-        temperature: nightTemp,
         condition: base.isDay === false ? base.condition : nightCondition,
         conditionHi: base.isDay === false ? base.conditionHi : nightConditionHi,
         icon: base.isDay === false && base.icon ? base.icon : nightIcon,
-        feelsLike: nightTemp - 1,
+        feelsLike: Math.round(cleanBase.temperature - 2),
         uvIndex: 0,
         isDay: false,
       };
@@ -411,14 +488,129 @@ export default function App() {
       ...cleanBase,
       isDay: true,
     };
-  }, [selectedLocation, lastRefreshedTime, liveWeatherData, isOffline, currentLocationObj]);
+  }, [selectedLocation, lastRefreshedTime, liveWeatherData, isOffline, currentLocationObj, language]);
+
+  // Track cache timestamp for active alerts
+  const [alertsCachedAt, setAlertsCachedAt] = useState<number | null>(() => {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const cachedRaw = localStorage.getItem(`mausam_alerts_${selectedLocation}`);
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          return typeof parsed?.cachedAt === 'number' ? parsed.cachedAt : null;
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   // Dynamic IMD safety weather alerts customized for current location & conditions
   const activeAlerts = useMemo(() => {
-    return getPersonalizedAlerts(currentLocationObj, currentWeather);
-  }, [currentLocationObj, currentWeather]);
+    // If offline, check if we have persisted cached alerts for this location
+    if (isOffline) {
+      try {
+        const cachedRaw = localStorage.getItem(`mausam_alerts_${selectedLocation}`);
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (Array.isArray(parsed?.alerts) && parsed.alerts.length > 0) {
+            return parsed.alerts;
+          }
+        }
+      } catch {
+        // fallback to procedural
+      }
+    }
 
-  // Dispatch push notification for severe storm alerts on location switch
+    const baseAlerts = getPersonalizedAlerts(currentLocationObj, currentWeather);
+    
+    // Supplement with official API Setu warnings if available
+    let computed = baseAlerts;
+    if (officialWarnings && officialWarnings.length > 0) {
+      const officialAlerts: WeatherAlert[] = officialWarnings.map((w, idx) => ({
+        id: `apisetu-warn-${idx}`,
+        type: w.warning_type,
+        severity: (w.warning_level.toLowerCase() === 'yellow' ? 'yellow' : 
+                  w.warning_level.toLowerCase() === 'orange' ? 'orange' : 
+                  w.warning_level.toLowerCase() === 'red' ? 'red' : 'yellow') as any,
+        title: `Official Bulletin: ${w.warning_type}`,
+        titleHi: `आधिकारिक सूचना: ${w.warning_type}`,
+        message: w.description,
+        messageHi: w.description,
+        startTime: 'Live Now',
+        endTime: 'Next 24 Hours',
+        location: currentLocationObj.name,
+        priorityScore: w.warning_level === 'Red' ? 100 : w.warning_level === 'Orange' ? 90 : 70,
+      }));
+      
+      // Filter out procedural "fair weather" if official risks exist
+      const filteredBase = baseAlerts.filter(a => a.id !== `alert-fair-${currentLocationObj.id}`);
+      computed = [...officialAlerts, ...filteredBase].sort((a, b) => b.priorityScore - a.priorityScore);
+    }
+
+    // Cache alerts locally whenever available for offline resilience
+    if (typeof window !== 'undefined' && computed && computed.length > 0) {
+      try {
+        const now = Date.now();
+        localStorage.setItem(
+          `mausam_alerts_${selectedLocation}`,
+          JSON.stringify({
+            alerts: computed,
+            cachedAt: now,
+            location: selectedLocation,
+          })
+        );
+        setAlertsCachedAt(now);
+      } catch {
+        // ignore
+      }
+    }
+    return computed;
+  }, [currentLocationObj, currentWeather, selectedLocation, isOffline, officialWarnings]);
+
+  // Register active alerts with Service Worker for background OS notifications even when app is closed
+  useEffect(() => {
+    if (activeAlerts && activeAlerts.length > 0) {
+      registerServiceWorkerBackgroundAlerts(
+        activeAlerts,
+        currentLocationObj?.name || selectedLocation
+      );
+    }
+  }, [activeAlerts, currentLocationObj, selectedLocation]);
+
+  // Schedule background notification when user leaves or minimizes the app while severe warnings exist
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        const criticalAlert =
+          activeAlerts.find((a) => a.severity === 'red') ||
+          activeAlerts.find((a) => a.severity === 'orange');
+        if (criticalAlert) {
+          scheduleBackgroundAlert({
+            title:
+              language === 'hi' && criticalAlert.titleHi
+                ? `⚠️ ${criticalAlert.titleHi}`
+                : `⚠️ ${criticalAlert.title}`,
+            body:
+              language === 'hi' && criticalAlert.messageHi
+                ? criticalAlert.messageHi
+                : criticalAlert.message,
+            severity: criticalAlert.severity as 'red' | 'orange',
+            location: currentLocationObj?.name || selectedLocation,
+            delayMs: 3500,
+          });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeAlerts, currentLocationObj, selectedLocation, language]);
+
+  // Dispatch push notification for severe storm alerts on location switch or alert updates
   useEffect(() => {
     const redAlert = activeAlerts.find((a) => a.severity === 'red');
     if (redAlert) {
@@ -432,9 +624,17 @@ export default function App() {
     }
   }, [selectedLocation, activeAlerts, language, currentLocationObj]);
 
-  // Personalized Health Data based on current AQI, pollutants, and location profile
+  // Personalized Health Data based on current AQI, pollutants, and location profile (works offline too)
   const personalizedHealthData = useMemo(() => {
-    if (!isOffline && liveWeatherData?.airQuality && liveWeatherData.locationId === selectedLocation) {
+    const isMatchingData = Boolean(
+      liveWeatherData &&
+      (liveWeatherData.locationId === selectedLocation ||
+       liveWeatherData.locationId === currentLocationObj.id ||
+       liveWeatherData.locationId.toLowerCase() === selectedLocation.toLowerCase() ||
+       liveWeatherData.locationId.toLowerCase() === currentLocationObj.name.toLowerCase())
+    );
+
+    if (liveWeatherData?.airQuality && isMatchingData) {
       return {
         ...liveWeatherData.airQuality,
         humidity: currentWeather.humidity,
@@ -464,7 +664,24 @@ export default function App() {
       currentWeather.humidity,
       currentWeather.uvIndex
     );
-  }, [currentWeather, liveWeatherData, selectedLocation, isOffline]);
+  }, [currentWeather, liveWeatherData, selectedLocation, currentLocationObj, isOffline]);
+
+  // Live traffic telemetry state
+  const [liveTrafficData, setLiveTrafficData] = useState<DynamicTrafficResult | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchLiveTrafficData(currentLocationObj, currentWeather)
+      .then((traffic) => {
+        if (isMounted && traffic) {
+          setLiveTrafficData(traffic);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [currentLocationObj, currentWeather]);
 
   // Location-Specific Dynamic Personalized Cards
   const personalizedFitnessData = useMemo(() => {
@@ -472,8 +689,22 @@ export default function App() {
   }, [currentLocationObj, currentWeather]);
 
   const personalizedCommuteData = useMemo(() => {
-    return getPersonalizedCommuteData(currentLocationObj, currentWeather);
-  }, [currentLocationObj, currentWeather]);
+    const base = getPersonalizedCommuteData(currentLocationObj, currentWeather);
+    if (!liveTrafficData) return base;
+    return {
+      ...base,
+      congestionIndex: liveTrafficData.congestionIndex,
+      lastTrafficUpdate: liveTrafficData.lastTrafficUpdate,
+      trafficProvider: liveTrafficData.provider,
+      currentRoute: {
+        ...base.currentRoute,
+        trafficLevel: liveTrafficData.trafficLevel,
+        trafficLevelHi: liveTrafficData.trafficLevelHi,
+        speedKmh: liveTrafficData.speedKmh,
+        delayMin: liveTrafficData.delayMin,
+      },
+    };
+  }, [currentLocationObj, currentWeather, liveTrafficData]);
 
   const personalizedAgricultureData = useMemo(() => {
     return getPersonalizedAgricultureData(currentLocationObj, currentWeather);
@@ -522,20 +753,34 @@ export default function App() {
     return filtered;
   }, [cardScores, preferences.preferences, activePersonaFilter]);
 
-  // Hourly and Daily Forecasts dynamically generated or fetched from live Open-Meteo API
+  // Hourly and Daily Forecasts dynamically generated or fetched from live/cached Open-Meteo data
   const hourlyForecast = useMemo(() => {
-    if (!isOffline && liveWeatherData && liveWeatherData.locationId === selectedLocation && liveWeatherData.hourlyForecast?.length) {
+    const isMatchingData = Boolean(
+      liveWeatherData &&
+      (liveWeatherData.locationId === selectedLocation ||
+       liveWeatherData.locationId === currentLocationObj.id ||
+       liveWeatherData.locationId.toLowerCase() === selectedLocation.toLowerCase() ||
+       liveWeatherData.locationId.toLowerCase() === currentLocationObj.name.toLowerCase())
+    );
+    if (isMatchingData && liveWeatherData?.hourlyForecast?.length) {
       return liveWeatherData.hourlyForecast;
     }
     return generateHourlyForecastForLocation(selectedLocation);
-  }, [selectedLocation, liveWeatherData, isOffline]);
+  }, [selectedLocation, liveWeatherData, currentLocationObj]);
 
   const dailyForecast = useMemo(() => {
-    if (!isOffline && liveWeatherData && liveWeatherData.locationId === selectedLocation && liveWeatherData.dailyForecast?.length) {
+    const isMatchingData = Boolean(
+      liveWeatherData &&
+      (liveWeatherData.locationId === selectedLocation ||
+       liveWeatherData.locationId === currentLocationObj.id ||
+       liveWeatherData.locationId.toLowerCase() === selectedLocation.toLowerCase() ||
+       liveWeatherData.locationId.toLowerCase() === currentLocationObj.name.toLowerCase())
+    );
+    if (isMatchingData && liveWeatherData?.dailyForecast?.length) {
       return liveWeatherData.dailyForecast;
     }
     return generateDailyForecastForLocation(selectedLocation);
-  }, [selectedLocation, liveWeatherData, isOffline]);
+  }, [selectedLocation, liveWeatherData, currentLocationObj]);
 
   // Toggle saving / bookmarking an Indian location
   const handleToggleSaveLocation = (locId: string) => {
@@ -595,7 +840,7 @@ export default function App() {
         cardContent = <HealthCard key="health" data={personalizedHealthData} {...props} />;
         break;
       case 'marine':
-        cardContent = <MarineCard key="marine" data={personalizedMarineData} {...props} />;
+        cardContent = <MarineCard key="marine" data={personalizedMarineData} language={language} isLiveApi={false} />;
         break;
       case 'travel':
         cardContent = <TravelCard key="travel" data={personalizedTravelData} {...props} />;
@@ -604,7 +849,7 @@ export default function App() {
         cardContent = <FamilyCard key="family" data={personalizedFamilyData} {...props} />;
         break;
       case 'agriculture':
-        cardContent = <AgricultureCard key="agriculture" data={personalizedAgricultureData} {...props} />;
+        cardContent = <AgricultureCard key="agriculture" data={personalizedAgricultureData} language={language} isLiveApi={false} />;
         break;
       case 'commute':
         cardContent = <CommuteCard key="commute" data={personalizedCommuteData} {...props} />;
@@ -617,7 +862,12 @@ export default function App() {
     }
 
     return (
-      <div key={cardId} className={`w-full h-full flex flex-col ${wrapperClass}`}>
+      <div 
+        key={cardId} 
+        className={`w-full flex flex-col ${wrapperClass}`}
+        role="region"
+        aria-label={`${cardId} information`}
+      >
         {cardContent}
       </div>
     );
@@ -634,7 +884,6 @@ export default function App() {
       <Header
         currentWeather={currentWeather}
         selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
         language={language}
         onToggleLanguage={() => setLanguage((l) => (l === 'en' ? 'hi' : 'en'))}
         theme={theme}
@@ -675,6 +924,10 @@ export default function App() {
               language={language}
               onOpenNotifications={() => setIsNotificationModalOpen(true)}
               isLiveApi={!isOffline && Boolean(liveWeatherData?.isLive) && liveWeatherData?.locationId === selectedLocation}
+              isOffline={isOffline}
+              isCached={isOffline || Boolean(liveWeatherData?.sourceType === 'cached' || liveWeatherData?.isCached)}
+              lastUpdated={currentWeather.lastUpdated}
+              cachedAt={alertsCachedAt}
             />
 
             {/* 2. Dynamic Weather Hero Section (Current weather & Location) */}
@@ -760,57 +1013,7 @@ export default function App() {
               isLiveApi={!isOffline && Boolean(liveWeatherData?.isLive)}
             />
 
-            {/* Institutional Weather Footer - Clean & Professional */}
-            <footer className="mt-12 pt-8 pb-10 border-t border-slate-200/80 dark:border-slate-800/80 text-xs text-slate-500 dark:text-slate-400 space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
-                <div>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 text-sm block">
-                    {language === 'hi' ? 'मौसम (Mausam)' : 'Mausam Weather Intelligence'}
-                  </span>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {language === 'hi'
-                      ? 'आईएमडी व सीपीसीबी मानकों और वैश्विक सिनोप्टिक अवलोकनों पर आधारित'
-                      : 'National meteorological service grounded in IMD, CPCB, and WMO observing standards.'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500 dark:text-slate-400 shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span>{language === 'hi' ? 'प्रमाणित सरकारी डेटा फ़ीड' : 'Verified Open Feeds'}</span>
-                </div>
-              </div>
 
-              {/* Data Provenance Matrix */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px]">
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-0.5">Atmospheric Telemetry</span>
-                  <p className="text-slate-500 dark:text-slate-400 text-[10px]">WMO stations, NOAA GFS, and DWD ICON open NWP numerical models.</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-0.5">Air Quality & Health</span>
-                  <p className="text-slate-500 dark:text-slate-400 text-[10px]">CPCB NAQI formulas (0–500 scale) with Copernicus CAMS telemetry.</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-0.5">Safety & Alerts</span>
-                  <p className="text-slate-500 dark:text-slate-400 text-[10px]">IMD color-coded criteria (Yellow, Orange, Red) and ICAR field guidelines.</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800/50 flex-wrap">
-                <span>© 2026 Mausam. All rights reserved.</span>
-                <div className="flex items-center gap-3">
-                  <a
-                    href="https://open-meteo.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                  >
-                    Open-Meteo API
-                  </a>
-                  <span>·</span>
-                  <span>IMD MoES Standards</span>
-                </div>
-              </div>
-            </footer>
           </PullToRefreshContainer>
         </main>
 

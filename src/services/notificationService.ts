@@ -3,12 +3,15 @@
  * Manages browser push notifications, permissions, audio alert chimes, and settings.
  */
 
+import { WeatherAlert } from '../types';
+
 export interface WeatherNotificationSettings {
   enabled: boolean;
   redAlerts: boolean;
   orangeAlerts: boolean;
   yellowAlerts: boolean;
   soundChime: boolean;
+  notifyWhenAppClosed: boolean;
 }
 
 export interface InAppAlertToast {
@@ -27,6 +30,7 @@ const DEFAULT_SETTINGS: WeatherNotificationSettings = {
   orangeAlerts: true,
   yellowAlerts: false,
   soundChime: true,
+  notifyWhenAppClosed: true,
 };
 
 // Track recent alerts to prevent duplicate spam within 5 minutes
@@ -214,29 +218,163 @@ export async function sendWeatherAlertPush(params: {
   };
   dispatchInAppAlertToast(toastDetail);
 
-  // 2. Fire native Web Notifications API if permission granted
+  // 2. Fire Service Worker background notification or native Web Notifications API if permission granted
   let nativeNotificationFired = false;
   if (isNotificationSupported() && Notification.permission === 'granted') {
-    try {
-      const notification = new Notification(params.title, {
-        body: `${params.body} • ${params.location}`,
-        tag: `mausam-alert-${params.severity}`,
-        icon: 'https://cdn-icons-png.flaticon.com/512/1163/1163624.png',
-        badge: 'https://cdn-icons-png.flaticon.com/512/1163/1163624.png',
-        lang: 'en',
-        requireInteraction: params.severity === 'red',
-        silent: !settings.soundChime,
-      });
+    const notificationOptions: NotificationOptions = {
+      body: `${params.body} • ${params.location}`,
+      tag: `mausam-alert-${params.severity}`,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      lang: 'en',
+      requireInteraction: params.severity === 'red',
+      silent: !settings.soundChime,
+      data: {
+        url: '/',
+        severity: params.severity,
+        location: params.location,
+        timestamp: Date.now(),
+      },
+    };
 
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-      nativeNotificationFired = true;
-    } catch (err) {
-      console.warn('Native Web Notification was blocked or failed, in-app toast was displayed:', err);
+    // Prefer Service Worker showNotification if active (works in background/minimized)
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        const registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000)),
+        ]);
+
+        if (registration && typeof registration.showNotification === 'function') {
+          await registration.showNotification(params.title, notificationOptions);
+          nativeNotificationFired = true;
+        }
+      } catch (swErr) {
+        console.warn('Service Worker showNotification attempt failed, trying fallback:', swErr);
+      }
+    }
+
+    // Fallback to standard window Notification if Service Worker was unavailable
+    if (!nativeNotificationFired) {
+      try {
+        const notification = new Notification(params.title, notificationOptions);
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+        nativeNotificationFired = true;
+      } catch (err) {
+        console.warn('Native Web Notification was blocked or failed, in-app toast was displayed:', err);
+      }
     }
   }
 
   return nativeNotificationFired || true;
 }
+
+/**
+ * Register active alerts with Service Worker and CacheStorage for background notification
+ * Enables OS notifications even if the app or browser tabs are closed.
+ */
+export async function registerServiceWorkerBackgroundAlerts(
+  alerts: WeatherAlert[],
+  location: string
+): Promise<void> {
+  if (typeof window === 'undefined' || !alerts || alerts.length === 0) return;
+
+  const settings = getNotificationSettings();
+  if (!settings.enabled || !settings.notifyWhenAppClosed) return;
+
+  try {
+    // 1. Store in CacheStorage so Service Worker can read it offline / in background
+    if ('caches' in window) {
+      const cache = await caches.open('mausam-offline-alerts-v1');
+      const payload = JSON.stringify({
+        alerts,
+        location,
+        timestamp: Date.now(),
+      });
+      await cache.put(
+        '/offline-alerts.json',
+        new Response(payload, {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    }
+
+    // 2. Notify active Service Worker controller
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'REGISTER_OFFLINE_ALERTS',
+        alerts,
+        location,
+        timestamp: Date.now(),
+      });
+    }
+
+    // 3. Register Periodic Background Sync if supported (e.g. Chrome on Android / Desktop PWA)
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      if ('periodicSync' in registration) {
+        try {
+          const status = await (navigator as any).permissions?.query({
+            name: 'periodic-background-sync',
+          });
+          if (status?.state === 'granted') {
+            await (registration as any).periodicSync.register('mausam-weather-alert-sync', {
+              minInterval: 15 * 60 * 1000, // 15 minutes minimum interval
+            });
+          }
+        } catch {
+          // Periodic sync permission policy not met in standard window; handled gracefully
+        }
+      }
+
+      // 4. Register one-shot background sync if supported
+      if ('sync' in registration) {
+        try {
+          await (registration as any).sync.register('mausam-weather-alert-sync');
+        } catch {
+          // Background sync not supported or permission denied
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Background alert synchronization skipped:', err);
+  }
+}
+
+/**
+ * Schedule a delayed background notification via Service Worker
+ * Triggered when user minimizes or closes the tab while severe warnings are active.
+ */
+export async function scheduleBackgroundAlert(params: {
+  title: string;
+  body: string;
+  severity: 'red' | 'orange';
+  location: string;
+  delayMs?: number;
+}): Promise<void> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  const settings = getNotificationSettings();
+  if (!settings.enabled || !settings.notifyWhenAppClosed) return;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    if (registration.active) {
+      registration.active.postMessage({
+        type: 'SCHEDULE_BACKGROUND_ALERT',
+        title: params.title,
+        delayMs: params.delayMs || 4000,
+        options: {
+          body: `${params.body} • ${params.location}`,
+          tag: `mausam-bg-${params.severity}`,
+          requireInteraction: params.severity === 'red',
+        },
+      });
+    }
+  } catch (err) {
+    console.warn('Schedule background alert failed:', err);
+  }
+}
+

@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { UserPreferences } from '../src/types.ts';
+import { UserPreferences } from '../src/types';
 
 /**
  * Server-side Supabase PostgreSQL Persistence Client (SIH 26076)

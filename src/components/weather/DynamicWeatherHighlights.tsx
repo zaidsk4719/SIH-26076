@@ -8,7 +8,7 @@ import {
   Sunrise,
   Sunset,
 } from 'lucide-react';
-import { CurrentWeather } from '../types';
+import { CurrentWeather } from '../../types';
 
 interface DynamicWeatherHighlightsProps {
   weather: CurrentWeather;
@@ -81,8 +81,8 @@ export const DynamicWeatherHighlights: React.FC<DynamicWeatherHighlightsProps> =
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
           <span>{language === 'hi' ? 'आज के मुख्य मौसम संकेतक' : "Today's Weather Highlights"}</span>
         </h3>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-          <span>{language === 'hi' ? 'आईएमडी एवं सीपीसीबी मानक' : 'IMD & CPCB Standard Telemetry'}</span>
+        <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+          <span>{language === 'hi' ? 'दैनिक मुख्य अवलोकन' : 'Key Observations'}</span>
         </div>
       </div>
 
@@ -218,15 +218,15 @@ export const DynamicWeatherHighlights: React.FC<DynamicWeatherHighlightsProps> =
                   ? (language === 'hi' ? 'चंद्रमा व रात्रि आकाश' : 'Moon & Night Schedule')
                   : (language === 'hi' ? 'सूर्योदय व सूर्यास्त' : 'Sun Schedule')}
               </span>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-sky-500" />
-                {language === 'hi' ? 'खगोलीय' : 'Solar Calc'}
+              <span className="text-slate-300 dark:text-slate-700">·</span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                {language === 'hi' ? 'खगोलीय गणना' : 'Solar Arc'}
               </span>
             </div>
             {isNight ? (
-              <Moon className="w-4 h-4 text-indigo-400" />
+              <Moon className="w-4 h-4 text-indigo-400 shrink-0" />
             ) : (
-              <Sunrise className="w-4 h-4 text-amber-500" />
+              <Sunrise className="w-4 h-4 text-amber-500 shrink-0" />
             )}
           </div>
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
-import { ttsService, TTSState } from '../services/ttsService';
+import { ttsService, TTSState } from '../../services/ttsService';
 
 interface TTSControlProps {
   id: string;

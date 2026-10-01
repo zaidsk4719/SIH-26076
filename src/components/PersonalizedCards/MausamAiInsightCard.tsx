@@ -9,7 +9,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { CurrentWeather, PreferenceId } from '../../types';
-import { TTSControl } from '../TTSControl';
+import { TTSControl } from '../interaction/TTSControl';
 
 interface MausamAiInsightCardProps {
   weather: CurrentWeather;
@@ -75,6 +75,12 @@ export const MausamAiInsightCard: React.FC<MausamAiInsightCardProps> = memo(({
           forceGemini,
         }),
       });
+
+      if (!res.ok) {
+        // Fallback or skip if rate limited / server error
+        return;
+      }
+
       const data = await res.json();
       if (data.success && data.data) {
         setInsight({
@@ -105,6 +111,11 @@ export const MausamAiInsightCard: React.FC<MausamAiInsightCardProps> = memo(({
           language,
         }),
       });
+
+      if (!res.ok) {
+        throw new Error(`Server returned status ${res.status}`);
+      }
+
       const data = await res.json();
       const answerContent = data?.data?.answer || data?.answer;
       if (data.success && answerContent) {
@@ -142,26 +153,23 @@ export const MausamAiInsightCard: React.FC<MausamAiInsightCardProps> = memo(({
       className="w-full min-w-0 max-w-full overflow-hidden bg-gradient-to-br from-indigo-950/90 via-slate-900 to-slate-900 border border-indigo-500/30 text-white rounded-2xl p-4 sm:p-5 shadow-lg relative"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-bold shrink-0">
             <Sparkles className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-white">
-                {language === 'hi' ? 'मौसम सिनोप्टिक सारांश' : 'Synoptic Meteorological Brief'}
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white truncate">
+                {language === 'hi' ? 'मौसम सारांश एवं परामर्श' : 'Meteorological Advisory'}
               </h3>
-              <span className="text-[11px] font-medium text-slate-400">
-                {isLiveApi ? (language === 'hi' ? 'लाइव टेलीमेट्री' : 'Live Telemetry') : (language === 'hi' ? 'मौसम मॉडल' : 'Synoptic Baseline')}
-              </span>
             </div>
             <p className="text-[11px] text-slate-400 truncate">
-              {weather.location} · {language === 'hi' ? 'मौसम विज्ञान डेटा आधारित दैनिक सारांश' : 'Atmospheric conditions & daily routine outlook'}
+              {weather.location} · {language === 'hi' ? 'व्यक्तिगत दैनिक सारांश' : 'Personalized daily routine outlook'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
           {loading && (
             <span className="text-[10px] text-indigo-300 font-medium animate-pulse px-2 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-700/60">
               {language === 'hi' ? 'विश्लेषण हो रहा है...' : 'Analyzing...'}

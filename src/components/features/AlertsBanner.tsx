@@ -10,21 +10,27 @@ import {
   CloudLightning,
   Sun,
   Waves,
+  HardDriveDownload,
 } from 'lucide-react';
-import { WeatherAlert } from '../types';
-import { TRANSLATIONS } from '../data/translations';
+import { WeatherAlert } from '../../types';
+import { TRANSLATIONS } from '../../data/translations';
 
 interface AlertsBannerProps {
   alerts: WeatherAlert[];
   language: 'en' | 'hi';
   onOpenNotifications?: () => void;
   isLiveApi?: boolean;
+  isOffline?: boolean;
+  isCached?: boolean;
+  lastUpdated?: string;
+  cachedAt?: number | null;
 }
 
 export const AlertsBanner: React.FC<AlertsBannerProps> = ({
   alerts,
   language,
-  isLiveApi = true,
+  isOffline = false,
+  isCached = false,
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(
     alerts.length > 0 ? alerts[0].id : null
@@ -33,6 +39,7 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({
   if (!alerts || alerts.length === 0) return null;
 
   const t = TRANSLATIONS[language];
+  const isStaleOrCached = isOffline || isCached;
 
   const getAlertIcon = (type: string) => {
     const lower = type.toLowerCase();
@@ -55,34 +62,31 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({
     switch (severity) {
       case 'red':
         return {
-          cardBg: 'bg-red-50 dark:bg-red-950/40',
-          border: 'border-red-300 dark:border-red-800',
+          cardBg: 'bg-red-50/70 dark:bg-red-950/30',
+          border: 'border-red-200 dark:border-red-900/60',
           badgeBg: 'bg-red-600 text-white',
-          textTitle: 'text-red-900 dark:text-red-100',
+          textTitle: 'text-red-950 dark:text-red-100',
           accent: 'text-red-600 dark:text-red-400',
-          ring: 'ring-red-500/20',
-          label: language === 'hi' ? 'लाल चेतावनी (Red Alert)' : 'IMD Red Warning',
+          label: language === 'hi' ? 'लाल चेतावनी' : 'Red Warning',
         };
       case 'orange':
         return {
-          cardBg: 'bg-orange-50 dark:bg-orange-950/40',
-          border: 'border-orange-300 dark:border-orange-800',
+          cardBg: 'bg-orange-50/70 dark:bg-orange-950/30',
+          border: 'border-orange-200 dark:border-orange-900/60',
           badgeBg: 'bg-orange-600 text-white',
           textTitle: 'text-orange-950 dark:text-orange-100',
           accent: 'text-orange-600 dark:text-orange-400',
-          ring: 'ring-orange-500/20',
-          label: language === 'hi' ? 'नारंगी चेतावनी (Orange Alert)' : 'IMD Orange Alert',
+          label: language === 'hi' ? 'नारंगी चेतावनी' : 'Orange Alert',
         };
       case 'yellow':
       default:
         return {
-          cardBg: 'bg-amber-50 dark:bg-amber-950/30',
-          border: 'border-amber-300 dark:border-amber-800',
+          cardBg: 'bg-amber-50/60 dark:bg-amber-950/20',
+          border: 'border-amber-200 dark:border-amber-900/50',
           badgeBg: 'bg-amber-500 text-slate-900 font-bold',
           textTitle: 'text-amber-950 dark:text-amber-100',
           accent: 'text-amber-600 dark:text-amber-400',
-          ring: 'ring-amber-500/20',
-          label: language === 'hi' ? 'पीला अलर्ट (Yellow Watch)' : 'IMD Yellow Watch',
+          label: language === 'hi' ? 'पीला अलर्ट' : 'Yellow Watch',
         };
     }
   };
@@ -91,24 +95,31 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({
     <section
       id="alerts-banner-section"
       aria-label="Active Weather Alerts"
-      className="space-y-2.5"
+      className="space-y-2"
     >
-      <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+      {/* Header bar: minimal, clean, no noisy banners */}
+      <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
           <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           <span>{t.activeAlertsTitle}</span>
-          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400 ml-1">
-            ({alerts.length} {language === 'hi' ? 'सक्रिय' : 'Active'})
+          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+            ({alerts.length})
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1 font-medium">
-            <span className={`w-1.5 h-1.5 rounded-full ${isLiveApi ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            <span>{isLiveApi ? (language === 'hi' ? 'आईएमडी चेतावनी मानक' : 'IMD Alert Standard') : (language === 'hi' ? 'सिम्युलेटेड बुलेटिन' : 'Synoptic Bulletin')}</span>
+
+        {/* Minimal cached status indicator only when offline */}
+        {isStaleOrCached && (
+          <span
+            id="alerts-cached-status"
+            className="text-[11px] font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1"
+          >
+            <HardDriveDownload className="w-3 h-3" />
+            <span>{language === 'hi' ? 'कैश्ड' : 'Cached'}</span>
           </span>
-        </div>
+        )}
       </div>
 
+      {/* Clean Alert Cards List */}
       <div className="space-y-2">
         {alerts.map((alert) => {
           const styles = getSeverityStyles(alert.severity);
@@ -138,17 +149,19 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({
                     <IconComp className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1 text-xs">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1 text-xs">
                       <span
                         className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${styles.badgeBg}`}
                       >
                         {styles.label}
                       </span>
-                      <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400" />
-                        {alert.location}
+
+                      <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1 truncate">
+                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{alert.location}</span>
                       </span>
                     </div>
+
                     <h3 className={`text-xs font-bold ${styles.textTitle} leading-snug`}>
                       {title}
                     </h3>
@@ -172,13 +185,20 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({
                   <p className="text-slate-700 dark:text-slate-200 leading-relaxed font-normal">
                     {message}
                   </p>
+
                   <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 flex-wrap gap-2">
                     <span className="flex items-center gap-1 font-mono">
                       <Clock className="w-3 h-3 text-slate-400" />
                       <span>{alert.startTime} to {alert.endTime}</span>
                     </span>
                     <span className="font-semibold text-slate-600 dark:text-slate-400">
-                      IMD Warning Division
+                      {isStaleOrCached
+                        ? language === 'hi'
+                          ? 'मौसम चेतावनी (कैश्ड)'
+                          : 'Weather Alert (Cached)'
+                        : language === 'hi'
+                        ? 'मौसम चेतावनी प्रणाली'
+                        : 'Early Warning System'}
                     </span>
                   </div>
                 </div>

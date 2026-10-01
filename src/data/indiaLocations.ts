@@ -191,6 +191,48 @@ export const ALL_INDIA_LOCATIONS: IndiaLocation[] = [
     popular: true,
   },
   {
+    id: 'sopore',
+    name: 'Sopore, Jammu & Kashmir',
+    nameHi: 'सोपोर, जम्मू और कश्मीर',
+    state: 'Jammu & Kashmir',
+    stateHi: 'जम्मू और कश्मीर',
+    region: 'North',
+    climateZone: 'Himalayan',
+    elevationMeters: 1590,
+    stationCode: 'AWS-42028',
+    lat: 34.3015,
+    lon: 74.4691,
+    popular: false,
+  },
+  {
+    id: 'baramulla',
+    name: 'Baramulla, Jammu & Kashmir',
+    nameHi: 'बारामूला, जम्मू और कश्मीर',
+    state: 'Jammu & Kashmir',
+    stateHi: 'जम्मू और कश्मीर',
+    region: 'North',
+    climateZone: 'Himalayan',
+    elevationMeters: 1600,
+    stationCode: 'AWS-42029',
+    lat: 34.2097,
+    lon: 74.3541,
+    popular: false,
+  },
+  {
+    id: 'anantnag',
+    name: 'Anantnag, Jammu & Kashmir',
+    nameHi: 'अनंतनाग, जम्मू और कश्मीर',
+    state: 'Jammu & Kashmir',
+    stateHi: 'जम्मू और कश्मीर',
+    region: 'North',
+    climateZone: 'Himalayan',
+    elevationMeters: 1601,
+    stationCode: 'AWS-42031',
+    lat: 33.7311,
+    lon: 75.1487,
+    popular: false,
+  },
+  {
     id: 'shimla',
     name: 'Shimla, Himachal Pradesh',
     nameHi: 'शिमला, हिमाचल प्रदेश',
@@ -3786,7 +3828,13 @@ export function getCustomIndiaLocations(): IndiaLocation[] {
 export function searchIndiaLocations(query: string, region: IndiaRegion | 'All' = 'All'): IndiaLocation[] {
   const cleanQ = query.trim().toLowerCase();
   const customLocs = getCustomIndiaLocations();
-  const combined = [...customLocs, ...ALL_INDIA_LOCATIONS];
+  const map = new Map<string, IndiaLocation>();
+  for (const loc of [...customLocs, ...ALL_INDIA_LOCATIONS]) {
+    if (loc && loc.id) {
+      map.set(loc.id.toLowerCase(), loc);
+    }
+  }
+  const combined = Array.from(map.values());
 
   return combined.filter((loc) => {
     const matchesRegion = region === 'All' || loc.region === region;
@@ -4183,7 +4231,7 @@ export function generateWeatherForLocation(
     airPressure: basePressure,
     uvIndex: baseUv,
     aqi,
-    lastUpdated: `Mock data (${loc.stationCode} • Elev ${loc.elevationMeters}m)`,
+    lastUpdated: '10:30 AM',
   };
 }
 

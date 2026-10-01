@@ -145,9 +145,9 @@ export class RuleEngineProvider implements AIProvider {
       advice.push(isHi ? 'इलेक्ट्रोलाइट्स व पानी का सेवन बनाए रखें' : 'Stay hydrated with electrolytes');
     } else {
       answer = isHi
-        ? `${loc} में मौसम ${temp}°C, ${req.weather.condition || 'सामान्य'} और ${humidity}% नमी के साथ बना हुआ है। आईएमडी के अनुसार दिन सामान्य रहेगा, स्थानीय परामर्श का पालन करें।`
-        : `Current conditions in ${loc}: ${temp}°C, ${req.weather.condition || 'Fair'}, with ${humidity}% humidity and ${rainProb}% rain chance. Follow official IMD district updates for synoptic developments.`;
-      advice.push(isHi ? 'स्थानीय मौसम बुलेटिन का पालन करें' : 'Follow local IMD district bulletins');
+        ? `${loc} में मौसम ${temp}°C, ${req.weather.condition || 'सामान्य'} और ${humidity}% नमी के साथ बना हुआ है। मौसम बुलेटिन के अनुसार दिन सामान्य रहेगा, स्थानीय परामर्श का पालन करें।`
+        : `Current conditions in ${loc}: ${temp}°C, ${req.weather.condition || 'Fair'}, with ${humidity}% humidity and ${rainProb}% rain chance. Follow meteorological district bulletins for synoptic developments.`;
+      advice.push(isHi ? 'स्थानीय मौसम बुलेटिन का पालन करें' : 'Follow local meteorological district bulletins');
       advice.push(isHi ? 'तापमान के अनुरूप दिन की योजना बनाएं' : 'Schedule outdoor activities around peak heat');
     }
 
@@ -217,7 +217,7 @@ export class GeminiProvider implements AIProvider {
   id = 'gemini';
   name = 'Google Gemini AI';
   private getClient: () => any;
-  private candidateModels = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+  private candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
   private modelCooldowns = new Map<string, number>();
 
   constructor(getClientFn: () => any) {
@@ -257,7 +257,7 @@ export class GeminiProvider implements AIProvider {
     const isHi = req.language === 'hi';
     const loc = req.weather.location || 'India';
 
-    const prompt = `You are the official Mausam AI weather intelligence assistant for the India Meteorological Department (IMD), Ministry of Earth Sciences.
+    const prompt = `You are Mausam AI, a prototype weather assistant for the Mausam personalized-homepage concept app (SIH26076), built using publicly available IMD/MoES-style weather data.
 Provide a concise, 2-part personalized weather insight based ONLY on this structured meteorological observation:
 - Location: ${loc} (${req.weather.state || 'India'})
 - Temperature: ${req.weather.temperature}°C (Feels like: ${req.weather.feelsLike ?? req.weather.temperature}°C)
@@ -328,7 +328,7 @@ Respond in strictly valid JSON format:
     const isHi = req.language === 'hi';
     const loc = req.weather.location || 'India';
 
-    const prompt = `You are "Mausam AI", the expert meteorologist and advisory assistant for the India Meteorological Department (IMD), Ministry of Earth Sciences, Govt. of India.
+    const prompt = `You are Mausam AI, a prototype weather assistant for the Mausam personalized-homepage concept app (SIH26076), built using publicly available IMD/MoES-style weather data.
 The user is asking a question about the weather for their location:
 - Location: ${loc} (${req.weather.state || 'India'})
 - Current Temperature: ${req.weather.temperature}°C (Feels like: ${req.weather.feelsLike ?? req.weather.temperature}°C)

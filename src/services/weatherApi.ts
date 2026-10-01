@@ -293,6 +293,20 @@ export const INDIA_COORDINATES: Record<string, LocationCoords> = {
   mahabaleshwar: { lat: 17.9237, lon: 73.6586 },
   alibaug: { lat: 18.6414, lon: 72.8722 },
   lavasa: { lat: 18.4093, lon: 73.5076 },
+  sopore: { lat: 34.3015, lon: 74.4691 },
+  baramulla: { lat: 34.2097, lon: 74.3541 },
+  kupwara: { lat: 34.5249, lon: 74.2562 },
+  anantnag: { lat: 33.7311, lon: 75.1487 },
+  pulwama: { lat: 33.8726, lon: 74.9009 },
+  shopian: { lat: 33.7222, lon: 74.8398 },
+  ganderbal: { lat: 34.2238, lon: 74.7792 },
+  bandipora: { lat: 34.4214, lon: 74.6469 },
+  kulgam: { lat: 33.6401, lon: 75.0163 },
+  ramban: { lat: 33.2429, lon: 75.1873 },
+  kishtwar: { lat: 33.3151, lon: 75.7725 },
+  poonch: { lat: 33.7709, lon: 74.0954 },
+  rajouri: { lat: 33.3768, lon: 74.3093 },
+  kathua: { lat: 32.3794, lon: 75.5168 },
 };
 
 // State-level accurate centroids across all Indian states and Union Territories
@@ -590,6 +604,8 @@ export interface LiveWeatherData {
   dailyForecast: DailyForecastItem[];
   airQuality?: HealthData;
   isLive: boolean;
+  isCached?: boolean;
+  cachedAt?: number;
   provider: string;
   lastSynced: string;
   sourceType: 'live_open_meteo' | 'cached' | 'fallback_procedural';
@@ -619,18 +635,69 @@ export async function searchLocationsViaApi(query: string): Promise<GeocodingRes
   if (!query || query.trim().length < 2) return [];
   try {
     const cleanQ = query.trim();
-    // 1. Try search prioritized with country_code=IN first
+    const primaryName = cleanQ.split(',')[0].trim();
+
+    // 1. Try search prioritized with country_code=IN first using primary name
     let url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-      cleanQ
+      primaryName
     )}&count=15&country_code=IN&language=en&format=json`;
     let res = await fetch(url, { headers: { Accept: 'application/json' } });
     let json = res.ok ? await res.json() : null;
     let rawList = json?.results || [];
 
-    // 2. If no results or user is searching for any location, query globally
-    if (rawList.length === 0) {
+    // 1b. If no results and cleanQ was different from primaryName, try full cleanQ
+    if (rawList.length === 0 && cleanQ !== primaryName) {
       url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
         cleanQ
+      )}&count=15&country_code=IN&language=en&format=json`;
+      res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (res.ok) {
+        json = await res.json();
+        rawList = json?.results || [];
+      }
+    }
+
+    // 1c. If still no results, query OpenStreetMap / Nominatim API for exact Indian town / village / tehsil match
+    if (rawList.length === 0) {
+      try {
+        const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&addressdetails=1&limit=10&q=${encodeURIComponent(
+          primaryName
+        )}`;
+        const osmRes = await fetch(osmUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': 'Mausam-IMD-Weather-App/1.0' },
+        });
+        if (osmRes.ok) {
+          const osmJson = await osmRes.json();
+          if (Array.isArray(osmJson) && osmJson.length > 0) {
+            osmJson.forEach((item: any, idx: number) => {
+              const lat = parseFloat(item.lat);
+              const lon = parseFloat(item.lon);
+              if (!isNaN(lat) && !isNaN(lon)) {
+                const nameStr = item.address?.city || item.address?.town || item.address?.village || item.address?.suburb || item.address?.county || item.display_name.split(',')[0];
+                const stateStr = item.address?.state || item.address?.country || 'India';
+                rawList.push({
+                  id: item.place_id || idx + 900000,
+                  name: nameStr,
+                  latitude: lat,
+                  longitude: lon,
+                  country: 'India',
+                  admin1: stateStr,
+                  admin2: item.address?.county || item.address?.state_district,
+                  elevation: 300,
+                });
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. If no results in India, query globally
+    if (rawList.length === 0) {
+      url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+        primaryName
       )}&count=15&language=en&format=json`;
       res = await fetch(url, { headers: { Accept: 'application/json' } });
       if (res.ok) {
@@ -1158,7 +1225,7 @@ export async function fetchLiveWeatherByCoords(
       airPressure: Math.round(cur.surface_pressure ?? 1013),
       uvIndex: isDay ? Math.round(weatherJson.hourly?.uv_index?.[12] ?? 6) : 0,
       aqi: airQuality.aqi,
-      lastUpdated: `Live API (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+      lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isDay,
     };
 
@@ -1272,7 +1339,7 @@ export async function fetchLiveWeatherForLocation(
   }
 
   const fetchPromise = (async () => {
-    const coords = getLocationCoordinates(loc.id);
+    const coords = getLocationCoordinates(loc);
 
     try {
       // 1. Fetch live meteorological forecast from Open-Meteo
@@ -1359,7 +1426,7 @@ export async function fetchLiveWeatherForLocation(
         airPressure: Math.round(cur.surface_pressure ?? 1012),
         uvIndex: isDay ? Math.round(weatherJson.hourly?.uv_index?.[12] ?? 6) : 0,
         aqi: airQuality.aqi,
-        lastUpdated: `Live Open-Meteo (${loc.stationCode} • Free API)`,
+        lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isDay,
       };
 
@@ -1452,7 +1519,7 @@ export async function fetchLiveWeatherForLocation(
         },
       };
 
-      // Cache locally with 20-minute expiry timestamp
+      // Cache locally with timestamp for offline resilience
       try {
         const cacheEntry = {
           data: result,
@@ -1465,23 +1532,11 @@ export async function fetchLiveWeatherForLocation(
 
       return result;
     } catch (err) {
-      console.warn('Open-Meteo live fetch failed, checking local cache:', err);
+      console.warn('Open-Meteo live fetch failed, restoring from local offline cache:', err);
       try {
-        const cachedRaw = localStorage.getItem(`mausam_live_${loc.id}`);
-        if (cachedRaw) {
-          const parsed = JSON.parse(cachedRaw);
-          const cachedData = parsed?.data ? parsed.data : parsed;
-          const cachedAt = typeof parsed?.cachedAt === 'number' ? parsed.cachedAt : 0;
-          const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes (within 15-30 min window)
-
-          if (cachedAt && Date.now() - cachedAt > CACHE_TTL_MS) {
-            console.warn(`Cached weather for ${loc.id} is stale (> 20 min old). Ignoring.`);
-            localStorage.removeItem(`mausam_live_${loc.id}`);
-            return null;
-          }
-
-          cachedData.sourceType = 'cached';
-          return cachedData;
+        const cached = getCachedWeatherForLocation(loc.id);
+        if (cached) {
+          return cached;
         }
       } catch {
         // ignore
@@ -1495,3 +1550,33 @@ export async function fetchLiveWeatherForLocation(
   inFlightWeatherRequests.set(cacheKey, fetchPromise);
   return fetchPromise;
 }
+
+/**
+ * Synchronously or directly retrieve cached weather data for an Indian location
+ * Used to immediately display offline forecasts when network is unreachable
+ */
+export function getCachedWeatherForLocation(locationId: string): LiveWeatherData | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const cachedRaw = localStorage.getItem(`mausam_live_${locationId}`);
+    if (cachedRaw) {
+      const parsed = JSON.parse(cachedRaw);
+      const cachedData: LiveWeatherData = parsed?.data ? parsed.data : parsed;
+      const cachedAt = typeof parsed?.cachedAt === 'number' ? parsed.cachedAt : Date.now();
+      const timeStr = new Date(cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return {
+        ...cachedData,
+        sourceType: 'cached',
+        isLive: false,
+        isCached: true,
+        cachedAt,
+        provider: 'Open-Meteo Cache (Offline)',
+        lastSynced: `Cached Bulletin (${timeStr})`,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+

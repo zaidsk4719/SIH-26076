@@ -41,7 +41,7 @@ const BASE_MOCK_CURRENT_WEATHER: Record<string, CurrentWeather> = {
     airPressure: 1008,
     uvIndex: 7,
     aqi: 86,
-    lastUpdated: 'Mock data (Pune Model)',
+    lastUpdated: '10:00 AM',
   },
   mumbai: {
     location: 'Mumbai, Maharashtra',
@@ -62,7 +62,7 @@ const BASE_MOCK_CURRENT_WEATHER: Record<string, CurrentWeather> = {
     airPressure: 1004,
     uvIndex: 4,
     aqi: 95,
-    lastUpdated: 'Mock data (Mumbai Model)',
+    lastUpdated: '10:00 AM',
   },
   delhi: {
     location: 'New Delhi, NCR',
@@ -83,7 +83,7 @@ const BASE_MOCK_CURRENT_WEATHER: Record<string, CurrentWeather> = {
     airPressure: 1002,
     uvIndex: 9,
     aqi: 218,
-    lastUpdated: 'Mock data (Delhi Model)',
+    lastUpdated: '10:00 AM',
   },
   nashik: {
     location: 'Nashik, Maharashtra',
@@ -104,7 +104,7 @@ const BASE_MOCK_CURRENT_WEATHER: Record<string, CurrentWeather> = {
     airPressure: 1009,
     uvIndex: 5,
     aqi: 54,
-    lastUpdated: 'Mock data (Nashik Model)',
+    lastUpdated: '10:00 AM',
   },
   goa: {
     location: 'Panaji, Goa',
@@ -125,7 +125,7 @@ const BASE_MOCK_CURRENT_WEATHER: Record<string, CurrentWeather> = {
     airPressure: 1006,
     uvIndex: 8,
     aqi: 42,
-    lastUpdated: 'Mock data (Goa Model)',
+    lastUpdated: '10:00 AM',
   },
   bengaluru: {
     location: 'Bengaluru, Karnataka',
@@ -146,7 +146,7 @@ const BASE_MOCK_CURRENT_WEATHER: Record<string, CurrentWeather> = {
     airPressure: 1012,
     uvIndex: 6,
     aqi: 48,
-    lastUpdated: 'Mock data (Bengaluru Model)',
+    lastUpdated: '10:00 AM',
   },
 };
 

@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { useState, memo } from 'react';
 import {
   Heart,
   Wind,
@@ -8,6 +8,8 @@ import {
   ShieldCheck,
   AlertCircle,
   Activity,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { HealthData } from '../../types';
 import { TRANSLATIONS } from '../../data/translations';
@@ -22,6 +24,7 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
   language,
 }) => {
   const t = TRANSLATIONS[language];
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const getAqiBadgeColor = (category: string) => {
     switch (category) {
@@ -51,7 +54,6 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
       };
     }
 
-    // Official CPCB NAQI standard categories per pollutant
     let cat: 'Good' | 'Satisfactory' | 'Moderate' | 'Poor' | 'Very Poor' | 'Severe' = 'Good';
 
     if (name === 'PM2.5') {
@@ -83,7 +85,6 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
       else if (val > 40) cat = 'Satisfactory';
       else cat = 'Good';
     } else if (name === 'CO') {
-      // Input in µg/m³; CPCB standard in mg/m³ (1000 µg/m³ = 1 mg/m³)
       if (val > 34000) cat = 'Severe';
       else if (val > 17000) cat = 'Very Poor';
       else if (val > 10000) cat = 'Poor';
@@ -91,7 +92,6 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
       else if (val > 1000) cat = 'Satisfactory';
       else cat = 'Good';
     } else if (name === 'O₃') {
-      // 1-hour CPCB exposure
       if (val > 500) cat = 'Severe';
       else if (val > 400) cat = 'Very Poor';
       else if (val > 280) cat = 'Poor';
@@ -231,24 +231,23 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
       className="w-full min-w-0 max-w-full overflow-hidden h-full flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm transition-all hover:shadow-md"
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3.5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
+      <div className="flex items-center justify-between mb-3.5 gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold shrink-0">
             <Heart className="w-4 h-4" />
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
               {t.prefHealth}
             </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
               {language === 'hi' ? 'वायु गुणवत्ता, परागकण व स्वास्थ्य परामर्श' : 'Air Quality, Pollen & Biometeorology'}
             </p>
           </div>
         </div>
 
-        {/* Quiet provenance indicator */}
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-          <span>{data.isLiveAqi ? (language === 'hi' ? 'सीपीसीबी मानक • कोपरनिकस' : 'CPCB NAQI · Copernicus CAMS') : (language === 'hi' ? 'सीपीसीबी मॉडल' : 'CPCB NAQI Baseline')}</span>
+        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium shrink-0 text-right">
+          <span>{language === 'hi' ? 'सीपीसीबी मानक' : 'CPCB NAQI Standard'}</span>
         </div>
       </div>
 
@@ -335,70 +334,8 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
         </div>
       </div>
 
-      {/* Atmospheric Pollutant Matrix (PM2.5, PM10, SO2, NO2, CO, O3, NH3) */}
-      <div className="mb-3.5 bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-indigo-500" />
-            {language === 'hi' ? 'विस्तृत वायु प्रदूषक स्तर (CPCB मानक):' : 'Detailed Pollutants Breakdown (CPCB Standards):'}
-          </span>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">
-            {data.dataSourceNotice || (data.isLiveAqi ? 'Open-Meteo Air Quality' : 'Synoptic Atmospheric Model')}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-          {pollutantsList.map((p) => {
-            const status = getPollutantStatus(p.name, p.rawValue);
-            return (
-              <div
-                key={p.id}
-                className="p-2 rounded-lg bg-white dark:bg-slate-900/90 border border-slate-200/60 dark:border-slate-800/70 flex flex-col justify-between"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
-                    {p.name}
-                  </span>
-                  <span className={`text-[9px] font-semibold px-1 py-0.2 rounded ${status.bg} ${status.color}`}>
-                    {status.label}
-                  </span>
-                </div>
-
-                <div className="my-1">
-                  {p.displayValue !== null && p.displayValue !== undefined ? (
-                    <div>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-base font-black text-slate-900 dark:text-white">
-                          {p.displayValue}
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-medium">
-                          {p.unit}
-                        </span>
-                      </div>
-                      {p.subtext && (
-                        <div className="text-[8px] text-slate-400 -mt-0.5 truncate">
-                          {p.subtext}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-[11px] font-medium text-slate-400 italic py-0.5">
-                      {language === 'hi' ? 'उपलब्ध नहीं' : 'Unmonitored'}
-                    </div>
-                  )}
-                </div>
-
-                <div className="text-[9px] text-slate-400 dark:text-slate-500 truncate" title={`${p.fullName} • ${p.standard}`}>
-                  {p.standard}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Primary Health Advisory */}
-      <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200/80 dark:border-sky-800/50 rounded-xl p-3 mb-3 flex items-start gap-2.5">
+      <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200/80 dark:border-sky-800/50 rounded-xl p-3 mb-2 flex items-start gap-2.5">
         <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
         <div className="text-xs">
           <span className="font-bold text-sky-950 dark:text-sky-200 block mb-0.5">
@@ -410,53 +347,131 @@ export const HealthCard: React.FC<HealthCardProps> = memo(({
         </div>
       </div>
 
-      {/* Clinical Health Interpretations for Vulnerable Groups */}
-      <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-2">
-          {language === 'hi' ? 'विशेष स्वास्थ्य समूह मार्गदर्शन व देखभाल:' : 'Targeted Health Guidance & Vulnerable Care:'}
-        </span>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          {/* Allergies */}
-          <div className="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40">
-            <span className="font-bold text-amber-900 dark:text-amber-200 block text-[11px] mb-0.5">
-              🌿 {language === 'hi' ? 'एलर्जी व परागकण' : 'Allergies & Pollen'}
-            </span>
-            <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-snug">
-              {language === 'hi'
-                ? `परागकण स्तर ${data.pollenCount} (${data.dominantPollenTypeHi || 'घास/पेड़'})। हवा चलने पर खिड़कियां बंद रखें और चेहरे को साफ पानी से धोएं।`
-                : `Pollen index at ${data.pollenCount} (${data.dominantPollenType || 'Grass'}). Keep windows sealed during high wind; antihistamines advised.`}
-            </p>
+      {/* Expandable Details Section */}
+      {isExpanded && (
+        <div className="space-y-3.5 mt-2 animate-in fade-in duration-200">
+          {/* Atmospheric Pollutant Matrix */}
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                {language === 'hi' ? 'विस्तृत वायु प्रदूषक स्तर (CPCB मानक):' : 'Detailed Pollutants Breakdown (CPCB Standards):'}
+              </span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                {language === 'hi' ? 'मानक सांद्रता' : 'Concentration Matrix'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {pollutantsList.map((p) => {
+                const status = getPollutantStatus(p.name, p.rawValue);
+                return (
+                  <div
+                    key={p.id}
+                    className="p-2 rounded-lg bg-white dark:bg-slate-900/90 border border-slate-200/60 dark:border-slate-800/70 flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                        {p.name}
+                      </span>
+                      <span className={`text-[9px] font-semibold px-1 py-0.2 rounded ${status.bg} ${status.color}`}>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    <div className="my-1">
+                      {p.displayValue !== null && p.displayValue !== undefined ? (
+                        <div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-base font-black text-slate-900 dark:text-white">
+                              {p.displayValue}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              {p.unit}
+                            </span>
+                          </div>
+                          {p.subtext && (
+                            <div className="text-[8px] text-slate-400 -mt-0.5 truncate">
+                              {p.subtext}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] font-medium text-slate-400 italic py-0.5">
+                          {language === 'hi' ? 'उपलब्ध नहीं' : 'Unmonitored'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-[9px] text-slate-400 dark:text-slate-500 truncate" title={`${p.fullName} • ${p.standard}`}>
+                      {p.standard}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Asthma & Respiratory */}
-          <div className="p-2.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/70 dark:border-rose-900/40">
-            <span className="font-bold text-rose-900 dark:text-rose-200 block text-[11px] mb-0.5">
-              🫁 {language === 'hi' ? 'अस्थमा व फेफड़े' : 'Asthma & Respiratory'}
+          {/* Clinical Health Interpretations for Vulnerable Groups */}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-2">
+              {language === 'hi' ? 'विशेष स्वास्थ्य समूह मार्गदर्शन व देखभाल:' : 'Targeted Health Guidance & Vulnerable Care:'}
             </span>
-            <p className="text-[10px] text-rose-800 dark:text-rose-300 leading-snug">
-              {data.interpretations
-                ? (language === 'hi' && data.interpretationsHi ? data.interpretationsHi.asthma : data.interpretations.asthma)
-                : (language === 'hi'
-                    ? `PM2.5 स्तर ${data.pm25 || 45} µg/m³। इनहेलर पास रखें और व्यस्त सड़कों के पास भारी दौड़ से बचें।`
-                    : `PM2.5 at ${data.pm25 || 45} µg/m³. Carry rescue inhaler; avoid intense cardio in dusty roadway zones.`)}
-            </p>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40">
+                <span className="font-bold text-amber-900 dark:text-amber-200 block text-[11px] mb-0.5">
+                  🌿 {language === 'hi' ? 'एलर्जी व परागकण' : 'Allergies & Pollen'}
+                </span>
+                <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-snug">
+                  {language === 'hi'
+                    ? `परागकण स्तर ${data.pollenCount} (${data.dominantPollenTypeHi || 'घास/पेड़'})। हवा चलने पर खिड़कियां बंद रखें और चेहरे को साफ पानी से धोएं।`
+                    : `Pollen index at ${data.pollenCount} (${data.dominantPollenType || 'Grass'}). Keep windows sealed during high wind; antihistamines advised.`}
+                </p>
+              </div>
 
-          {/* Elderly & Children */}
-          <div className="p-2.5 rounded-xl bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/70 dark:border-violet-900/40">
-            <span className="font-bold text-violet-900 dark:text-violet-200 block text-[11px] mb-0.5">
-              👴 {language === 'hi' ? 'वरिष्ठ नागरिक व बच्चे' : 'Elderly & Pediatric Care'}
-            </span>
-            <p className="text-[10px] text-violet-800 dark:text-violet-300 leading-snug">
-              {data.interpretations
-                ? (language === 'hi' && data.interpretationsHi ? data.interpretationsHi.elderly : data.interpretations.elderly)
-                : (language === 'hi'
-                    ? 'वरिष्ठ नागरिक सुबह की धूप में हल्की सैर करें और पर्याप्त पानी पिएं।'
-                    : 'Senior citizens and young children should avoid peak traffic times for morning walks.')}
-            </p>
+              <div className="p-2.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/70 dark:border-rose-900/40">
+                <span className="font-bold text-rose-900 dark:text-rose-200 block text-[11px] mb-0.5">
+                  🫁 {language === 'hi' ? 'अस्थमा व फेफड़े' : 'Asthma & Respiratory'}
+                </span>
+                <p className="text-[10px] text-rose-800 dark:text-rose-300 leading-snug">
+                  {data.interpretations
+                    ? (language === 'hi' && data.interpretationsHi ? data.interpretationsHi.asthma : data.interpretations.asthma)
+                    : (language === 'hi'
+                        ? `PM2.5 स्तर ${data.pm25 || 45} µg/m³। इनहेलर पास रखें और व्यस्त सड़कों के पास भारी दौड़ से बचें।`
+                        : `PM2.5 at ${data.pm25 || 45} µg/m³. Carry rescue inhaler; avoid intense cardio in dusty roadway zones.`)}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/70 dark:border-violet-900/40">
+                <span className="font-bold text-violet-900 dark:text-violet-200 block text-[11px] mb-0.5">
+                  👴 {language === 'hi' ? 'वरिष्ठ नागरिक व बच्चे' : 'Elderly & Pediatric Care'}
+                </span>
+                <p className="text-[10px] text-violet-800 dark:text-violet-300 leading-snug">
+                  {data.interpretations
+                    ? (language === 'hi' && data.interpretationsHi ? data.interpretationsHi.elderly : data.interpretations.elderly)
+                    : (language === 'hi'
+                        ? 'वरिष्ठ नागरिक सुबह की धूप में हल्की सैर करें और पर्याप्त पानी पिएं।'
+                        : 'Senior citizens and young children should avoid peak traffic times for morning walks.')}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Expand / Collapse Toggle Button */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        type="button"
+        className="w-full mt-3.5 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs border border-slate-200 dark:border-slate-700"
+      >
+        <span>
+          {isExpanded
+            ? (language === 'hi' ? 'कम विवरण दिखाएं' : 'Show Less')
+            : (language === 'hi' ? 'विस्तृत जानकारी देखें' : 'Expand Details')}
+        </span>
+        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
     </article>
   );
 });

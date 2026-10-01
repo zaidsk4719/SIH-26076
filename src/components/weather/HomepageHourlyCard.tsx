@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, CloudRain, Sun, Cloud, CloudLightning, Moon, CloudFog, CloudMoon, CloudSun } from 'lucide-react';
-import { HourlyForecast } from '../types';
+import { HourlyForecast } from '../../types';
 
 interface HomepageHourlyCardProps {
   hourly: HourlyForecast[];
@@ -75,11 +75,9 @@ export const HomepageHourlyCard: React.FC<HomepageHourlyCardProps> = ({
           <Clock className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
           <span>{language === 'hi' ? '24 घंटे का पूर्वानुमान' : 'Hourly Forecast'}</span>
         </h3>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-          <span>{isLiveApi ? (language === 'hi' ? 'एनओएए / डीडब्ल्यूडी मॉडल' : 'Synoptic Numerical Model') : (language === 'hi' ? 'डायूरनल सिमुलेशन' : 'Diurnal Projection')}</span>
-          <span className="hidden sm:inline text-slate-300 dark:text-slate-700">·</span>
-          <span className="text-[10px] text-slate-400 hidden sm:inline">
-            {language === 'hi' ? 'पूर्वावलोकन के लिए समय चुनें' : 'Tap hour to inspect'}
+        <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+          <span>
+            {language === 'hi' ? 'विस्तार देखने के लिए समय चुनें' : 'Tap hour to inspect'}
           </span>
         </div>
       </div>

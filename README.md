@@ -1,103 +1,108 @@
-# Mausam — Personalized Homepage for Weather Mobile App
+# Mausam — Personalized Weather Homepage
+
 > **Smart India Hackathon (SIH 2026) | Problem Statement: SIH26076**  
 > **Ministry of Earth Sciences (MoES) / India Meteorological Department (IMD)**
 
-A mobile-first, high-performance personalized weather homepage engineered for the **Mausam** mobile ecosystem. Features real-time GPS auto-detection across India, dynamic WMO synoptic weather integration, rule-based card prioritization, bilingual English/Hindi support, and emergency severe weather push notifications.
+A mobile-first, high-performance personalized weather homepage engineered for the **Mausam** ecosystem (SIH26076). Rather than functioning as a raw forecasting model, the application ingests live WMO meteorological observations and atmospheric pollutants across India, transforming them into context-aware decision support prioritized for specific citizen personas (farmers, coastal fishermen, urban commuters, fitness enthusiasts, families, travelers, and event organizers).
 
 ---
 
-## Key Highlights
+## Architecture Summary
 
-- **Precise All-India Location Auto-Detection**:
-  - Dual-tier high-accuracy GPS with automatic reverse geocoding via Photon and Nominatim.
-  - Multi-tier network/IP telemetry fallback with automatic proximity mapping to 160+ official IMD AWS meteorological stations.
-  - Safe coordinate scaling and mathematical Haversine distance calculations.
+Mausam is structured as a modular full-stack application featuring a React 19 Progressive Web App (`frontend/`) served through an Express.js API gateway (`backend/`). Atmospheric observations are retrieved client-side from Open-Meteo's WMO weather and CPCB air quality APIs, while user preferences and Gemini AI insights are managed server-side with zero client-side credential exposure and automatic fallback to a deterministic synoptic rule engine.
 
-- **Rule-Based Personalization Engine**:
-  - Algorithmic scoring evaluating citizen activity profiles (`agriculture`, `marine`, `fitness`, `commute`, `health`, `travel`, `family`, `events`).
-  - Contextual sensitivity to temperature thresholds, AQI (CPCB National Air Quality Index), precipitation probability, and wind shear.
-
-- **Synoptic Weather & Diurnal Visualization**:
-  - Real-time Open-Meteo WMO-standard live feeds with 24-hour hourly and 7-day meteorological forecasts.
-  - Diurnal night/day solar cycles with dynamic cloud cover, starfields, rain particle canvas, and fog shaders.
-  - Offline-first procedural weather generator for disaster/disconnected scenarios.
-
-- **Public Safety & Emergency Warning System**:
-  - Official IMD colour-coded alert banners (**Red**, **Orange**, **Yellow**, **Green**).
-  - Web Notification API integration for storm alerts.
-  - Bilingual Hindi (`hi`) and English (`en`) emergency advisories.
-  - Integrated Text-to-Speech (TTS) synthesizer for hands-free audio announcements.
+📖 **For detailed architecture, data flow diagrams, and personalization mechanics, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).**
 
 ---
 
-## Technical Stack
+## Confirmed Technology Stack
 
-| Layer | Technologies |
-| --- | --- |
-| **Frontend UI** | React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion |
-| **Backend Gateway** | Express.js (Node.js / TypeScript) |
-| **Data Engine** | Open-Meteo WMO API, Photon Reverse Geocoder, CPCB AQI Standard |
-| **Storage & Cache** | Supabase PostgreSQL, Redis Cache with In-Memory Fallback, LocalStorage |
-| **AI Insights** | Google Gemini API (Server-side proxy with synoptic rule engine fallback) |
+| Layer | Technologies & Libraries |
+| :--- | :--- |
+| **Frontend Client** | React 19, TypeScript, Tailwind CSS v4, Motion, Lucide Icons, Vite PWA (`vite-plugin-pwa`) |
+| **Backend Gateway** | Express.js 4, Node.js (v18/v20), TypeScript, `express-rate-limit` |
+| **Data Engine & Weather** | Open-Meteo WMO Forecast API, Open-Meteo Air Quality API, CPCB NAQI formula engine |
+| **Geolocation & Geocoding** | Browser Geolocation API, Komoot Photon, OpenStreetMap Nominatim, GeoJS, IPWhoIs |
+| **AI Insights & Advisory** | Google Gemini API (`@google/genai` SDK) with deterministic Synoptic Rule Engine fallback |
+| **Cache & Persistence** | Redis (`ioredis`) with In-Memory Map fallback, Supabase PostgreSQL with In-Memory fallback |
 
 ---
 
-## Architecture Overview
+## Directory Structure
 
 ```
-                          ┌────────────────────────┐
-                          │     Citizen Client     │
-                          │      (React / PWA)     │
-                          └───────────┬────────────┘
-                                      │
-                 ┌────────────────────┼────────────────────┐
-                 ▼                    ▼                    ▼
-        ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-        │ Geolocation Svc │  │ Personalization │  │ Weather Engine  │
-        │ GPS / Reverse   │  │ Rule Engine     │  │ Open-Meteo Free │
-        │ Geocoding & IP  │  │ Multi-Profile   │  │ Synoptic Fallback
-        └────────┬────────┘  └────────┬────────┘  └────────┬────────┘
-                 │                    │                    │
-                 └────────────────────┼────────────────────┘
-                                      ▼
-                          ┌────────────────────────┐
-                          │ Express.js API Gateway │
-                          │  (Node.js / TypeScript)│
-                          └────────────────────────┘
+mausam-sih26076/
+├── public/                       # Static assets, PWA manifests, sw-push-handler.js
+├── src/                          # React frontend source
+│   ├── components/               # Modular UI components
+│   │   ├── features/             # High-level feature blocks (Alerts, Banners)
+│   │   ├── interaction/          # Interaction handlers (Pull-to-refresh, TTS)
+│   │   ├── layout/               # Structural layout (Header, Persona Switcher)
+│   │   ├── PersonalizedCards/    # Persona-specific synoptic insight cards
+│   │   ├── ui/                   # Reusable base UI elements & Modals
+│   │   └── weather/              # Specialized weather visualizations
+│   ├── services/                 # External API integrations & logic
+│   ├── data/                     # Mock datasets, translations, location index
+│   ├── engine/                   # Rule-based personalization scoring engine
+│   ├── utils/                    # Formatting and session utilities
+│   ├── types/                    # Centralized TypeScript definitions
+│   └── App.tsx                   # Main application entry and state coordinator
+├── server/                       # Express.js backend gateway source
+│   ├── index.ts                  # Backend entry point, API routes, Vite middleware
+│   ├── aiProvider.ts             # Google Gemini & Synoptic Rule Engine
+│   ├── apiSetuService.ts         # Official national API platform gateway
+│   ├── redisCache.ts             # Key-value persistence with in-memory fallback
+│   └── supabaseClient.ts         # SQL persistence with in-memory fallback
+├── docs/                         # Engineering Documentation
+├── tsconfig.json                 # TypeScript coordination
+└── vite.config.ts                # Vite bundler & PWA orchestration
 ```
 
 ---
 
-## Quick Start & Local Development
+## Quickstart
 
-### 1. Prerequisites
-- Node.js 18+ or 20+
-- npm 9+
-
-### 2. Installation
+### 1. Clone & Install
 ```bash
+git clone https://github.com/your-org/mausam-sih26076.git
+cd mausam-sih26076
 npm install
 ```
 
-### 3. Running the Development Server
+### 2. Configure Environment
+```bash
+cp .env.example .env
+# Edit .env and optionally add your GEMINI_API_KEY (Google AI Studio)
+```
+
+### 3. Run Development Server
 ```bash
 npm run dev
 ```
-The server binds to `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 4. Compiling for Production
+### 4. Build for Production
 ```bash
 npm run build
 ```
-This bundles the client assets into `dist/` and builds the server into `dist/server.cjs`.
+Compiles client assets into `dist/` and bundles the server into `dist/server.cjs`.
 
-### 5. Starting in Production
+### 5. Start in Production
 ```bash
 npm start
 ```
+Starts the production server on `http://localhost:3000`.
+
+---
+
+## Documentation Links
+
+- 🏛️ **[System Architecture (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: Deep dive into the architecture, data flows, Gemini agent constraints, and personalization scoring engine.
+- 🔌 **[API Documentation (docs/API.md)](docs/API.md)**: Active external APIs, planned integrations, and internal Express endpoints.
+- ⚙️ **[Setup & Deployment Guide (docs/SETUP.md)](docs/SETUP.md)**: Local prerequisites, environment variables, Docker/Cloud Run deployment, and troubleshooting.
 
 ---
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
+This project was developed for the **Smart India Hackathon (SIH 2026)** under Problem Statement **SIH26076**. Licensed under the [MIT License](LICENSE).
